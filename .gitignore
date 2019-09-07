@@ -1,6 +1,8 @@
 
 # IDEs
+.vs
 .idea
 
 # Build
 cmake-build-debug
+out
