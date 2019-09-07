@@ -11,7 +11,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         tools:ignore="GoogleAppIndexingWarning">
 
-        <activity android:name=".MainActivity">
+        <activity
+            android:name=".MainActivity">
 
             <meta-data android:name="android.app.lib_name" android:value="android-app" />
 
