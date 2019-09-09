@@ -10,6 +10,11 @@
 constexpr wchar_t appName[] = L"Shining Emulator";
 constexpr wchar_t windowClassName[] = L"ShEmu";
 
+#ifdef _WIN32
+#include "../SharedLib/gbc/debugwindowmodule.h"
+extern DebugWindowModule debugger;
+#endif
+
 static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HINSTANCE hInst;
 HWND hWnd = NULL;
@@ -75,7 +80,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     UpdateWindow(hWnd);
 
     // Create the dependencies for the app
-    WindowsAppPlatform appPlatform(hWnd);
+    WindowsAppPlatform appPlatform(hInst, hWnd);
     WindowsRendererFactory rendererFactory(hDC, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 
     // Construct the app using Windows dependencies
@@ -122,6 +127,13 @@ ATOM registerWindowClass() {
 bool mouseButtonDown = false;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
+		case LAUNCH_DEBUG_MSG:
+			if (runningApp) {
+				auto actualApp = (GbcApp*)runningApp;
+				auto gbc = actualApp->getGbc();
+				debugger.showWindow(hInst, hWnd, gbc);
+			}
+			break;
         case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);

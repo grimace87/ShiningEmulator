@@ -3,6 +3,8 @@
 #include "../app.h"
 #include "../gbc/inputset.h"
 
+class Gbc;
+
 class GbcApp : public App {
 private:
     InputSet gbcKeys;
@@ -13,6 +15,7 @@ protected:
 public:
     GbcApp(AppPlatform& platform, RendererFactory& rendererFactory);
     ~GbcApp() override;
+	Gbc* getGbc();
     void persistState() override;
     void loadPersistentState() override;
     void doWork() override;

@@ -6,9 +6,9 @@
 class AppPlatform;
 
 class Sram {
-    unsigned char* data;
     FILE* sramFile = nullptr;
 public:
+    unsigned char* data;
     bool hasBattery = false;
     bool hasTimer = false;
     unsigned char timerData[5] = { '\0', '\0', '\0', '\0', '\0' };

@@ -2,12 +2,15 @@
 
 #include "windowsresource.h"
 #include "windowsfilehelper.h"
+#include "../SharedLib/menu.h"
 
 #include <Xinput.h>
 #include <shtypes.h>
 #include <ShObjIdl_core.h>
 
-WindowsAppPlatform::WindowsAppPlatform(HWND hWnd) : hWnd(hWnd), mainMenu(nullptr) { }
+#include "../SharedLib/gbc/debugwindowmodule.h"
+
+WindowsAppPlatform::WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd) : hInstance(hInstance), hWnd(hWnd), mainMenu(Menu::buildMain()) { }
 
 bool WindowsAppPlatform::onAppThreadStarted(App* app) {
     HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
@@ -139,6 +142,10 @@ FILE* WindowsAppPlatform::openFileInAppDir(std::string fileName, const char* mod
         }
         return nullptr;
     }
+}
+
+void WindowsAppPlatform::openDebugWindow(Gbc* gbc) {
+	SendMessageW(hWnd, LAUNCH_DEBUG_MSG, 0, 0);
 }
 
 void WindowsAppPlatform::withCurrentTime(std::function<void(struct tm*)> func) {

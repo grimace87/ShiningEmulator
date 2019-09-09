@@ -21,6 +21,10 @@ GbcApp::~GbcApp() {
     App::~App();
 }
 
+Gbc* GbcApp::getGbc() {
+	return &gbc;
+}
+
 void GbcApp::persistState() {
     persistentState = *GbcAppState::getCurrentInstance();
 }
@@ -66,6 +70,9 @@ void GbcApp::processMsg(const Message& msg) {
             break;
         case Action::MSG_UNUSED:
             break;
+		case Action::MSG_OPEN_DEBUGGER:
+			platform.openDebugWindow(&gbc);
+			break;
         default: ;
     }
 }

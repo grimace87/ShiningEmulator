@@ -9,6 +9,11 @@
 #include <chrono>
 #include <cassert>
 
+#ifdef _WIN32
+#include "debugwindowmodule.h"
+extern DebugWindowModule debugger;
+#endif
+
 uint32_t stockPaletteBg[4] = { 0xffffffff, 0xff88b0b0, 0xff507878, 0xff000000 };
 uint32_t stockPaletteObj1[4] = { 0xffffffff, 0xff5050f0, 0xff2020a0, 0xff000000 };
 uint32_t stockPaletteObj2[4] = { 0xffffffff, 0xffa0a0a0, 0xff404040, 0xff000000 };
@@ -21,14 +26,6 @@ uint32_t stockPaletteObj2[4] = { 0xffffffff, 0xffa0a0a0, 0xff404040, 0xff000000 
 #define GB_FREQ  4194304
 #define SGB_FREQ 4295454
 #define GBC_FREQ 8400000
-
-#define MBC_NONE 0x00
-#define MBC1     0x01
-#define MBC2     0x02
-#define MBC3     0x03
-#define MBC4     0x04
-#define MBC5     0x05
-#define MMM01    0x11
 
 const unsigned char OFFICIAL_LOGO[48] = {
         0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d,
@@ -379,8 +376,12 @@ void Gbc::reset() {
     accessVram = true;
     serialRequest = false;
     serialClockIsExternal = false;
-    debugger.breakCode = 0;
     needClear = false;
+
+#ifdef _WIN32
+	debugger.breakCode = 0;
+#endif
+
 
     // Resetting IO ports may avoid graphical glitches when switching to a colour game. Clearing VRAM may help too.
     std::fill(ioPorts, ioPorts + 256, 0);
@@ -484,6 +485,14 @@ void Gbc::reset() {
     running = true;
 }
 
+void Gbc::pause() {
+	running = false;
+}
+
+void Gbc::resume() {
+	running = true;
+}
+
 int Gbc::execute(int ticks) {
     unsigned char instr, msb, lsb, interruptable;
     int startClocksAcc;
@@ -510,10 +519,12 @@ int Gbc::execute(int ticks) {
     }
 
     while (clocksAcc > 0) {
+#ifdef _WIN32
         if (debugger.breakCode > 0) {
             running = false;
             break;
         }
+#endif
 
         instr = read8(cpuPc);
         msb = read8(cpuPc + 1);
@@ -627,12 +638,14 @@ int Gbc::execute(int ticks) {
             }
         }
 
-        end_of_int_check:
+	end_of_int_check:
+#ifdef _WIN32
         if (debugger.breakOnPc) {
             if (cpuPc == debugger.breakPcAddr) {
                 debugger.breakCode = 3;
             }
         }
+#endif
 
         displayEnabled = ioPorts[0x0040] & 0x80;
 
@@ -867,12 +880,14 @@ int Gbc::execute(int ticks) {
 
 unsigned char Gbc::read8(unsigned int address) {
     address &= 0xffff;
+#ifdef _WIN32
     if (debugger.breakOnRead) {
         if ((address == debugger.breakReadAddr) && (debugger.breakCode != 5)) {
             debugger.breakCode = 5;
             debugger.breakReadByte = (unsigned int)read8(address);
         }
     }
+#endif
 
     if (address < 0x4000) {
         return rom[address];
@@ -998,12 +1013,14 @@ void Gbc::read16(unsigned int address, unsigned char* msb, unsigned char* lsb) {
 
 void Gbc::write8(unsigned int address, unsigned char byte) {
     address &= 0xffff;
+#ifdef _WIN32
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)byte;
             debugger.breakCode = 4;
         }
     }
+#endif
     if (address < 0x8000) {
         switch (romProperties.mbc) {
             case MBC1:
@@ -1060,6 +1077,7 @@ void Gbc::write8(unsigned int address, unsigned char byte) {
                 if (address < 0x2000) {
                     byte = byte & 0x0f;
                     sram.enableFlag = byte == 0x0a; // Also enables timer registers
+#ifdef _WIN32
                     if (sram.enableFlag) {
                         if (debugger.breakOnSramEnable) {
                             debugger.breakCode = 1;
@@ -1069,6 +1087,7 @@ void Gbc::write8(unsigned int address, unsigned char byte) {
                             debugger.breakCode = 2;
                         }
                     }
+#endif
                     return;
                 } else if (address < 0x4000) {
                     byte &= romProperties.bankSelectMask;
@@ -1198,6 +1217,7 @@ void Gbc::write8(unsigned int address, unsigned char byte) {
 
 void Gbc::write16(unsigned int address, unsigned char msb, unsigned char lsb) {
     address &= 0xffff;
+#ifdef _WIN32
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)msb;
@@ -1207,6 +1227,7 @@ void Gbc::write16(unsigned int address, unsigned char msb, unsigned char lsb) {
             debugger.breakCode = 4;
         }
     }
+#endif
     if (address < 0x8000) {
         write8(address, msb);
         write8(address + 1, lsb);
@@ -4009,17 +4030,15 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 4;
         case 0xc0: // ret NZ
-            if ((cpuF & 0x80) != 0x00)
-            {
+            if ((cpuF & 0x80) != 0x00) {
                 cpuPc++;
                 return 8;
-            }
-            else
-            {
-                if (debugger.totalBreakEnables > 0)
-                {
+            } else {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallReturned = 1;
                 }
+#endif
                 unsigned char msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
@@ -4055,12 +4074,13 @@ unsigned int Gbc::performOp()
             {
                 unsigned char msb = read8(cpuPc + 1);
                 unsigned char lsb = read8(cpuPc + 2);
-                if (debugger.totalBreakEnables > 0)
-                {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
                     debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
+#endif
                 cpuPc += 3;
                 cpuSp -= 2;
                 write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -4084,24 +4104,25 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xc7: // rst 0 (call routine at 0x0000)
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
             cpuPc = 0x00;
             return 16;
         case 0xc8: // ret Z
-            if ((cpuF & 0x80) != 0x00)
-            {
-                if (debugger.totalBreakEnables > 0)
-                {
+            if ((cpuF & 0x80) != 0x00) {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallReturned = 1;
                 }
+#endif
                 unsigned char msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
@@ -4115,10 +4136,11 @@ unsigned int Gbc::performOp()
             }
         case 0xc9: // return
         {
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallReturned = 1;
             }
+#endif
             unsigned char msb, lsb;
             read16(cpuSp, &msb, &lsb);
             cpuSp += 2;
@@ -5630,12 +5652,13 @@ unsigned int Gbc::performOp()
             {
                 unsigned char msb = read8(cpuPc + 1);
                 unsigned char lsb = read8(cpuPc + 2);
-                if (debugger.totalBreakEnables > 0)
-                {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
                     debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
+#endif
                 cpuSp -= 2;
                 cpuPc += 3;
                 write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -5651,12 +5674,13 @@ unsigned int Gbc::performOp()
         {
             unsigned char msb = read8(cpuPc + 1);
             unsigned char lsb = read8(cpuPc + 2);
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc += 3;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -5683,29 +5707,28 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xcf: // rst 8 (call 0x0008)
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x8;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
             cpuPc = 0x0008;
             return 16;
         case 0xd0: // ret NC
-            if ((cpuF & 0x10) != 0x00)
-            {
+            if ((cpuF & 0x10) != 0x00) {
                 cpuPc++;
                 return 8;
-            }
-            else
-            {
-                if (debugger.totalBreakEnables > 0)
-                {
+            } else {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallReturned = 1;
                 }
+#endif
                 unsigned char msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
@@ -5742,12 +5765,13 @@ unsigned int Gbc::performOp()
             {
                 unsigned char msb = read8(cpuPc + 1);
                 unsigned char lsb = read8(cpuPc + 2);
-                if (debugger.totalBreakEnables > 0)
-                {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
                     debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
+#endif
                 cpuSp -= 2;
                 cpuPc += 3;
                 write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -5774,41 +5798,41 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xd7: // rst 10
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x10;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
             cpuPc = 0x0010;
             return 16;
         case 0xd8: // ret C
-            if ((cpuF & 0x10) != 0x00)
-            {
-                if (debugger.totalBreakEnables > 0)
-                {
+            if ((cpuF & 0x10) != 0x00) {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallReturned = 1;
                 }
+#endif
                 unsigned char msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
                 cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
                 return 20;
-            }
-            else
-            {
+            } else {
                 cpuPc++;
                 return 8;
             }
         case 0xd9: // reti
         {
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallReturned = 1;
             }
+#endif
             unsigned char msb, lsb;
             read16(cpuSp, &msb, &lsb);
             cpuSp += 2;
@@ -5832,24 +5856,22 @@ unsigned int Gbc::performOp()
             throwException(instr);
             return clocksAcc;
         case 0xdc: // call C, nn
-            if ((cpuF & 0x10) != 0x00)
-            {
+            if ((cpuF & 0x10) != 0x00) {
                 unsigned char msb = read8(cpuPc + 1);
                 unsigned char lsb = read8(cpuPc + 2);
-                if (debugger.totalBreakEnables > 0)
-                {
+#ifdef _WIN32
+                if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
                     debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
+#endif
                 cpuSp -= 2;
                 cpuPc += 3;
                 write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
                 cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
                 return 24;
-            }
-            else
-            {
+            } else {
                 cpuPc += 3;
                 return 12;
             }
@@ -5880,12 +5902,13 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xdf: // rst 18
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x18;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -5924,12 +5947,13 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xe7: // rst 20
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x20;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -5982,12 +6006,13 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xef: // rst 28
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x28;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -6027,12 +6052,13 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xf7: // rst 30
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x30;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -6091,12 +6117,13 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0xff: // rst 38
-            if (debugger.totalBreakEnables > 0)
-            {
+#ifdef _WIN32
+            if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
                 debugger.breakLastCallTo = 0x38;
                 debugger.breakLastCallReturned = 0;
             }
+#endif
             cpuSp -= 2;
             cpuPc++;
             write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
@@ -6105,5 +6132,3 @@ unsigned int Gbc::performOp()
     }
     return 0;
 }
-
-

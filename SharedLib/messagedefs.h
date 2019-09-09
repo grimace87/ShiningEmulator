@@ -7,5 +7,6 @@ enum class Action {
     MSG_RESUME,
     MSG_OPEN_FILE,
     MSG_FILE_RETRIEVED,
-    MSG_UPDATE_SIZE
+    MSG_UPDATE_SIZE,
+	MSG_OPEN_DEBUGGER
 };

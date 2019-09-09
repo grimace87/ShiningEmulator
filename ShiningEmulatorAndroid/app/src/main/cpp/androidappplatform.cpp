@@ -115,6 +115,10 @@ FILE* AndroidAppPlatform::openFileInAppDir(std::string fileName, const char* mod
     return returnFile;
 }
 
+void AndroidAppPlatform::openDebugWindow(Gbc *gbc) {
+
+}
+
 void AndroidAppPlatform::withCurrentTime(std::function<void(struct tm*)> func) {
     time_t timestamp = time(nullptr);
     struct tm* localTime = localtime(&timestamp);

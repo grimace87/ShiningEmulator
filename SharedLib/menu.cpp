@@ -11,9 +11,9 @@ Menu Menu::buildMain() {
     // Build main menu
     return Menu {
             L"", {
-                    Menu {L"Things", {
-                        Menu {L"Open something", Action::MSG_OPEN_FILE},
-                        Menu {L"Stuff", Action::MSG_UNUSED}
+                    Menu {L"Actions", {
+                        Menu {L"Open ROM", Action::MSG_OPEN_FILE},
+                        Menu {L"Show debug window", Action::MSG_OPEN_DEBUGGER}
                     }},
                     Menu {L"Exit", Action::MSG_EXIT}
             }

@@ -3,6 +3,8 @@ project(ShiningEmulatorWindows)
 
 set(CMAKE_CXX_STANDARD 17)
 
+ADD_DEFINITIONS(-DUNICODE)
+
 set(BUILD_SHARED_LIBS STATIC)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../SharedLib ${CMAKE_CURRENT_BINARY_DIR}/lib)
 

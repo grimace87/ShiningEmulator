@@ -61,19 +61,11 @@ class Gbc {
 
     // RAM stats
     bool accessOam;
-    unsigned int bankOffset;
     unsigned int wramBankOffset;
 
     // VRAM stats
     bool accessVram;
     unsigned int vramBankOffset;
-
-    // SRAM and SGB
-    Sram sram;
-    SgbModule sgb;
-
-    // Debug window module
-    DebugWindowModule debugger;
 
     // CGB stats
     unsigned char cgbBgPalData[64];
@@ -116,6 +108,11 @@ public:
 
     // ROM stats
     RomProperties romProperties;
+	unsigned int bankOffset;
+
+    // SRAM and SGB
+    Sram sram;
+    SgbModule sgb;
 
     // CPU registers
     unsigned int cpuPc;
@@ -143,4 +140,6 @@ public:
     // Other public functions
     bool loadRom(std::string fileName, const unsigned char* data, int dataLength, AppPlatform& appPlatform);
     void reset();
+	void pause();
+	void resume();
 };

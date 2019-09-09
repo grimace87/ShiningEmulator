@@ -40,6 +40,7 @@ public:
 	Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) override;
 	Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) override;
 	FILE* openFileInAppDir(std::string fileName, const char* mode) override;
+	void openDebugWindow(Gbc* gbc) override;
 	void withCurrentTime(std::function<void(struct tm*)> func) override;
 	void pollGamepad() override;
 	int32_t handleInputEvent(AInputEvent* event);

@@ -9,6 +9,7 @@
 
 class Resource;
 class App;
+class Gbc;
 
 class AppPlatform {
 public:
@@ -26,6 +27,7 @@ public:
     virtual Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) = 0;
     virtual Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) = 0;
     virtual FILE* openFileInAppDir(std::string fileName, const char* mode) = 0;
+	virtual void openDebugWindow(Gbc* gbc) = 0;
     virtual void withCurrentTime(std::function<void(struct tm*)> func) = 0;
     virtual void pollGamepad() = 0;
     virtual uint64_t getUptimeMillis() = 0;
