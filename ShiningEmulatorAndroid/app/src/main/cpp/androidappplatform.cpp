@@ -45,6 +45,9 @@ AndroidAppPlatform::AndroidAppPlatform(ANativeActivity* _activity) : AppPlatform
     // Store activity reference
     activity = _activity;
     javaActivityClass = nullptr;
+
+    // Signal using touchscreen
+    usesTouch = true;
 }
 
 bool AndroidAppPlatform::onAppThreadStarted(App* app) {

@@ -9,7 +9,8 @@ class Image;
 namespace FCT {
     const int RECT = 0;
     const int TEXT = 1;
-    const int GAME = 2;
+    const int GAME_WINDOW = 2;
+    const int GAME_HUD = 3;
 }
 
 namespace RCT {
@@ -18,8 +19,9 @@ namespace RCT {
 
     const int TEXT_MENU_BTN = 0;
 
+    const int GAME_WINDOW = 0;
+
     const int GAME_HUD = 0;
-    const int GAME_WINDOW = 1;
 }
 
 class GbcRenderer : public Renderer {
@@ -33,5 +35,6 @@ public:
     ~GbcRenderer() override;
     std::vector<TextButton> uiButtons;
     std::vector<Image> gameplayButtons;
+    bool showUi;
 };
 

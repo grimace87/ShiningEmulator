@@ -10,7 +10,9 @@
 
 #include "../SharedLib/gbc/debugwindowmodule.h"
 
-WindowsAppPlatform::WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd) : hInstance(hInstance), hWnd(hWnd), mainMenu(Menu::buildMain()) { }
+WindowsAppPlatform::WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd) : hInstance(hInstance), hWnd(hWnd), mainMenu(Menu::buildMain()) {
+	this->usesTouch = false;
+}
 
 bool WindowsAppPlatform::onAppThreadStarted(App* app) {
     HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);

@@ -23,6 +23,7 @@ public:
     bool inputsChanged = false;
     bool keyboardInputs[256];
     GamepadInputs gamepadInputs;
+    bool usesTouch = false;
     virtual bool onAppThreadStarted(App* app) = 0;
     virtual Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) = 0;
     virtual Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) = 0;

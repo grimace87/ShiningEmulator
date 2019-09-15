@@ -18,6 +18,7 @@
 GbcRenderer::GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* gbc) :
         Renderer(appPlatform, platformRenderer), gbc(gbc), windowTextureHandle(0) {
     this->frameState = new GbcAppState();
+    this->showUi = appPlatform->usesTouch;
 }
 
 GbcRenderer::~GbcRenderer() = default;
@@ -81,41 +82,47 @@ bool GbcRenderer::initObject() {
     buttonOutlinesVbo = platformRenderer->createVbo(&buttonFloats.front(), floatsForButtonOutlines);
     buttonLabelsVbo = platformRenderer->createVbo(&buttonFloats.front() + floatsForButtonOutlines, floatsForButtonLabels);
 
+    // Get ready to adjust for screen orientation
+    bool wide = platformRenderer->canvasWidth > platformRenderer->canvasHeight;
+    float lowMargin = wide ? 0.0F : 0.15F;
+    float sideButtonLowMargin = wide ? 0.0F : 0.15F;
+    float sideMargin = wide ? 0.1F : 0.0F;
+
     // Create gameplay buttons
     buttonSize = { 0.75f, 0.75f };
-    buttonMargins = { 0.125f, 0.0f, 0.0f, 0.1875f };
+    buttonMargins = { 0.125f, 0.0f, 0.0f, 0.1875f + lowMargin + sideButtonLowMargin };
     buttonBgTextureBounds = { 0.375f, 0.375f, 0.5f, 0.5f };
     auto dpadImage = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::START);
     buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.5f, 0.3125f };
+    buttonMargins = { 0.0f, 0.0f, 0.5f + sideMargin, 0.3125f + lowMargin + sideButtonLowMargin };
     buttonBgTextureBounds = { 0.875f, 0.25f, 1.0f, 0.375f };
     auto bButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
     buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.5f, 0.3125f };
+    buttonMargins = { 0.0f, 0.0f, 0.5f + sideMargin, 0.3125f + lowMargin + sideButtonLowMargin };
     buttonBgTextureBounds = { 0.625f, 0.375f, 0.75f, 0.5f };
     auto bButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
     buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.125f, 0.1875f };
+    buttonMargins = { 0.0f, 0.0f, 0.125f + sideMargin, 0.1875f + lowMargin + sideButtonLowMargin };
     buttonBgTextureBounds = { 0.875f, 0.25f, 1.0f, 0.375f };
     auto aButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
     buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.125f, 0.1875f };
+    buttonMargins = { 0.0f, 0.0f, 0.125f + sideMargin, 0.1875f + lowMargin + sideButtonLowMargin };
     buttonBgTextureBounds = { 0.5f, 0.375f, 0.625f, 0.5f };
     auto aButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
     buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.1875f, 0.125f };
+    buttonMargins = { 0.0f, 0.0f, 0.1875f, 0.125f + lowMargin };
     buttonBgTextureBounds = { 0.875f, 0.375f, 1.0f, 0.4375f };
     auto selectButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
     buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.1875f, 0.125f };
+    buttonMargins = { 0.0f, 0.0f, 0.1875f, 0.125f + lowMargin };
     buttonBgTextureBounds = { 0.75f, 0.375f, 0.875f, 0.4375f };
     auto selectButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
     buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.1875f, 0.0f, 0.0f, 0.125f };
+    buttonMargins = { 0.1875f, 0.0f, 0.0f, 0.125f + lowMargin };
     buttonBgTextureBounds = { 0.875f, 0.375f, 1.0f, 0.4375f };
     auto startButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
     buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.1875f, 0.0f, 0.0f, 0.125f };
+    buttonMargins = { 0.1875f, 0.0f, 0.0f, 0.125f + lowMargin };
     buttonBgTextureBounds = { 0.75f, 0.4375f, 0.875f, 0.5f };
     auto startButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
 
@@ -162,15 +169,18 @@ bool GbcRenderer::initObject() {
     FrameConfig textConfig;
     textConfig.shader = fontShader;
     textConfig.renderConfigs.push_back(config3);
-    FrameConfig gameplayConfig;
-    gameplayConfig.shader = mainShader;
-    gameplayConfig.renderConfigs.push_back(config5);
-    gameplayConfig.renderConfigs.push_back(config4);
+    FrameConfig gameplayWindowConfig;
+    gameplayWindowConfig.shader = mainShader;
+    gameplayWindowConfig.renderConfigs.push_back(config5);
+    FrameConfig gameplayHudConfig;
+    gameplayHudConfig.shader = mainShader;
+    gameplayHudConfig.renderConfigs.push_back(config4);
 
     // Collect the frame configs
     frameConfigs.push_back(mainConfig);
     frameConfigs.push_back(textConfig);
-    frameConfigs.push_back(gameplayConfig);
+    frameConfigs.push_back(gameplayWindowConfig);
+    frameConfigs.push_back(gameplayHudConfig);
 
     // Finish with resources
     delete mainTextureResource;
@@ -194,34 +204,32 @@ void GbcRenderer::doWork() {
     platformRenderer->verifyNoError();
 
     bool framePrepared = false;
-    int firstConfig, configCount;
+    unsigned int firstConfig = 0;
+    unsigned int configCount = 0;
     if (frameQueued)
     {
         // Cast app state, check mode, prepare frame configs and indicate which to render
-        GbcAppState* state = (GbcAppState*) frameState;
-        if (state->appMode == AppMode::MAIN_MENU)
-        {
+        auto state = (GbcAppState*) frameState;
+        if (state->appMode == AppMode::MAIN_MENU) {
             // Construct transformation matrices
             glm::mat4 mainMvpMatrix(1.0f);
 
             // Set uniforms for the main menu UI background/button rectangles
             auto& rectConfig = frameConfigs[FCT::RECT];
-            ((TextureShader*)rectConfig.shader)->prepareConfig(rectConfig.renderConfigs[RCT::RECT_MENU_BG], 0, glm::value_ptr(mainMvpMatrix));
-            ((TextureShader*)rectConfig.shader)->prepareConfig(rectConfig.renderConfigs[RCT::RECT_MENU_BTN_OUTLINE], 0, glm::value_ptr(mainMvpMatrix));
+            TextureShader::prepareConfig(rectConfig.renderConfigs[RCT::RECT_MENU_BG], 0, glm::value_ptr(mainMvpMatrix));
+            TextureShader::prepareConfig(rectConfig.renderConfigs[RCT::RECT_MENU_BTN_OUTLINE], 0, glm::value_ptr(mainMvpMatrix));
 
             // Set uniforms for the main menu UI button text
             float r = 0.5f;
             float g = 0.2f;
             float b = 0.1f;
             auto& textConfig = frameConfigs[FCT::TEXT];
-            ((FontShader*)textConfig.shader)->prepareConfig(textConfig.renderConfigs[RCT::TEXT_MENU_BTN], 0, glm::value_ptr(mainMvpMatrix), r, g, b);
+            FontShader::prepareConfig(textConfig.renderConfigs[RCT::TEXT_MENU_BTN], 0, glm::value_ptr(mainMvpMatrix), r, g, b);
 
             firstConfig = 0;
             configCount = 2;
             framePrepared = true;
-        }
-        else if (state->appMode == AppMode::PLAYING)
-        {
+        } else if (state->appMode == AppMode::PLAYING) {
             uint32_t* upscaledFrameBuffer = gbc->frameManager.getRenderableFrameBuffer();
             if (upscaledFrameBuffer != nullptr) {
                 // Construct transformation matrix
@@ -234,12 +242,16 @@ void GbcRenderer::doWork() {
                 gbc->frameManager.freeFrame(upscaledFrameBuffer);
 
                 // Set uniforms for the heads-up display rectangles
-                auto& playConfig = frameConfigs[FCT::GAME];
-                ((TextureShader*)playConfig.shader)->prepareConfig(playConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
-                ((TextureShader*)playConfig.shader)->prepareConfig(playConfig.renderConfigs[RCT::GAME_WINDOW], 0, glm::value_ptr(mainMvpMatrix));
-
                 firstConfig = 2;
                 configCount = 1;
+                auto& windowConfig = frameConfigs[FCT::GAME_WINDOW];
+                TextureShader::prepareConfig(windowConfig.renderConfigs[RCT::GAME_WINDOW], 0, glm::value_ptr(mainMvpMatrix));
+                if (appPlatform->usesTouch) {
+                    auto &hudConfig = frameConfigs[FCT::GAME_HUD];
+                    TextureShader::prepareConfig(hudConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
+                    configCount++;
+                }
+
                 framePrepared = true;
             }
         } else {
@@ -253,8 +265,7 @@ void GbcRenderer::doWork() {
     lock.unlock();
 
     // Render the queued frame
-    if (framePrepared)
-    {
+    if (framePrepared) {
         platformRenderer->renderPass(frameConfigs, firstConfig, configCount);
     }
 
