@@ -141,7 +141,7 @@ bool GbcRenderer::initObject() {
     // Create window assets
     float* scaledWindowFloats = generateWindowFloats(0.8f, aspect);
     windowVbo = platformRenderer->createVbo(scaledWindowFloats, windowFloatCount);
-    this->windowTextureHandle = platformRenderer->createTexture(TEXTURE_FORMAT_RGBA, nullptr, 160, 144, false);
+    this->windowTextureHandle = platformRenderer->createTexture(TEXTURE_FORMAT_RGBA, nullptr, 160 * 4, 144 * 4, false);
 
     // Make sure rendering functions didn't generate an error
     platformRenderer->verifyNoError();
@@ -222,17 +222,16 @@ void GbcRenderer::doWork() {
         }
         else if (state->appMode == AppMode::PLAYING)
         {
-            uint32_t* frameBuffer = gbc->frameManager.getRenderableFrameBuffer();
-            if (frameBuffer != nullptr)
-            {
+            uint32_t* upscaledFrameBuffer = gbc->frameManager.getRenderableFrameBuffer();
+            if (upscaledFrameBuffer != nullptr) {
                 // Construct transformation matrix
                 int width, height;
                 queryCanvasSize(&width, &height);
                 float aspect = (float)width / (float)height;
                 glm::mat4 mainMvpMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / aspect, 1.0f, 1.0f));
 
-                platformRenderer->subTexture(this->windowTextureHandle, TEXTURE_FORMAT_RGBA, 0, 0, 160, 144, (unsigned char*)frameBuffer);
-                gbc->frameManager.freeFrame(frameBuffer);
+                platformRenderer->subTexture(this->windowTextureHandle, TEXTURE_FORMAT_RGBA, 0, 0, 160 * 4, 144 * 4, (unsigned char*)upscaledFrameBuffer);
+                gbc->frameManager.freeFrame(upscaledFrameBuffer);
 
                 // Set uniforms for the heads-up display rectangles
                 auto& playConfig = frameConfigs[FCT::GAME];
@@ -243,9 +242,7 @@ void GbcRenderer::doWork() {
                 configCount = 1;
                 framePrepared = true;
             }
-        }
-        else
-        {
+        } else {
             //auto msg = std::string("Invald game state: ") + std::to_string(static_cast<int>(state->appMode));
             //throw std::runtime_error(msg);
         }

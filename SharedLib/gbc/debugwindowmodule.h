@@ -2,6 +2,10 @@
 
 #ifdef _WIN32
 
+#ifndef UNICODE
+#define UNICODE
+#endif
+
 #include <Windows.h>
 
 #define LAUNCH_DEBUG_MSG WM_USER + 1

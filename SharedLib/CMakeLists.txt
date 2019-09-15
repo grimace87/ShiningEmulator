@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.10.2)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -8,6 +8,7 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         appstate.cpp
         font.cpp
         ../lib/lodepng/lodepng.cpp
+        ../lib/libxbr-standalone/xbr.cpp
         menu.cpp
         renderer.cpp
         resource.cpp
