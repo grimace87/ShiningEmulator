@@ -176,7 +176,7 @@ void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc
         475, 166, 145, 200,
         debugWindow, nullptr, instance, nullptr
     );
-    dropdownBankDefProc = (WNDPROC)SetWindowLongPtr(dropdownBankComponent, GWLP_WNDPROC, (LONG_PTR)dropdownBankDefProc);
+    dropdownBankDefProc = (WNDPROC)SetWindowLongPtr(dropdownBankComponent, GWLP_WNDPROC, (LONG_PTR)dropdownBankWndProc);
     SendMessage(dropdownBankComponent, CB_ADDSTRING, 0, (LPARAM)L"Bank 0");
     SendMessage(dropdownBankComponent, CB_SETCURSEL, 0, 0);
 
@@ -959,7 +959,7 @@ LRESULT APIENTRY DebugWindowModule::checkBoxWndProc(HWND hWnd, UINT message, WPA
 
 LRESULT APIENTRY DebugWindowModule::breakPcAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
-	char* ReplaceText = new char[2];
+	wchar_t replacementText[2];
 	DWORD dwStartPos, dwEndPos;
 
 	// Capture keys pressed
@@ -967,10 +967,10 @@ LRESULT APIENTRY DebugWindowModule::breakPcAddrWndProc(HWND hWnd, UINT message, 
 		if ((wParam >= 0x30 && wParam <= 0x39) || (wParam >= 0x41 && wParam <= 0x46)) {
 			SendMessage(hWnd, EM_GETSEL, (WPARAM)& dwStartPos, (LPARAM)& dwEndPos);
 			if ((dwStartPos == dwEndPos) && (dwStartPos < 4)) {
-				ReplaceText[0] = (char)wParam;
-				ReplaceText[1] = '\0';
+                replacementText[0] = (wchar_t)wParam;
+                replacementText[1] = L'\0';
 				SendMessage(hWnd, EM_SETSEL, (WPARAM)dwStartPos, (LPARAM)(dwStartPos + 1));
-				SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)ReplaceText);
+				SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)replacementText);
 				debugger.decodeBreakPCAddress();
 			}
 		}
@@ -981,7 +981,7 @@ LRESULT APIENTRY DebugWindowModule::breakPcAddrWndProc(HWND hWnd, UINT message, 
 
 LRESULT APIENTRY DebugWindowModule::breakWriteAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
-	char* ReplaceText = new char[2];
+	wchar_t replacementText[2];
 	DWORD dwStartPos, dwEndPos;
 
 	// Capture keys pressed
@@ -989,10 +989,10 @@ LRESULT APIENTRY DebugWindowModule::breakWriteAddrWndProc(HWND hWnd, UINT messag
 		if ((wParam >= 0x30 && wParam <= 0x39) || (wParam >= 0x41 && wParam <= 0x46)) {
 			SendMessage(hWnd, EM_GETSEL, (WPARAM)& dwStartPos, (LPARAM)& dwEndPos);
 			if ((dwStartPos == dwEndPos) && (dwStartPos < 4)) {
-				ReplaceText[0] = (char)wParam;
-				ReplaceText[1] = '\0';
+                replacementText[0] = (wchar_t)wParam;
+                replacementText[1] = L'\0';
 				SendMessage(hWnd, EM_SETSEL, (WPARAM)dwStartPos, (LPARAM)(dwStartPos + 1));
-				SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)ReplaceText);
+				SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)replacementText);
 				debugger.decodeBreakWriteAddress();
 			}
 		}
@@ -1003,7 +1003,7 @@ LRESULT APIENTRY DebugWindowModule::breakWriteAddrWndProc(HWND hWnd, UINT messag
 
 LRESULT APIENTRY DebugWindowModule::breakReadAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
-	char* ReplaceText = new char[2];
+	wchar_t replacementText[2];
 	DWORD dwStartPos, dwEndPos;
 
 	// Capture keys pressed
@@ -1011,10 +1011,10 @@ LRESULT APIENTRY DebugWindowModule::breakReadAddrWndProc(HWND hWnd, UINT message
 		if ((wParam >= 0x30 && wParam <= 0x39) || (wParam >= 0x41 && wParam <= 0x46)) {
 			SendMessage(hWnd, EM_GETSEL, (WPARAM)& dwStartPos, (LPARAM)& dwEndPos);
 			if ((dwStartPos == dwEndPos) && (dwStartPos < 4)) {
-				ReplaceText[0] = (char)wParam;
-				ReplaceText[1] = '\0';
+                replacementText[0] = (wchar_t)wParam;
+                replacementText[1] = L'\0';
 				SendMessage(hWnd, EM_SETSEL, (WPARAM)dwStartPos, (LPARAM)(dwStartPos + 1));
-				SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)ReplaceText);
+				SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)replacementText);
 				debugger.decodeBreakReadAddress();
 			}
 		}
