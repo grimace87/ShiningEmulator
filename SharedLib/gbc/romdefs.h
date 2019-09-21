@@ -1,26 +1,28 @@
 #pragma once
 
-#define MBC_NONE 0x00
-#define MBC1     0x01
-#define MBC2     0x02
-#define MBC3     0x03
-#define MBC4     0x04
-#define MBC5     0x05
-#define MMM01    0x11
+#include <cstdint>
+
+#define MBC_NONE 0x00U
+#define MBC1     0x01U
+#define MBC2     0x02U
+#define MBC3     0x03U
+#define MBC4     0x04U
+#define MBC5     0x05U
+#define MMM01    0x11U
 
 struct RomProperties {
     bool valid;
     char title[17];
     unsigned int mbc;
-    unsigned char cgbFlag;
-    unsigned char sgbFlag;
+    bool cgbFlag;
+    bool sgbFlag;
     bool hasSram;
     bool hasRumble;
     long sizeBytes;
-    unsigned char bankSelectMask;
+    uint32_t bankSelectMask;
 
-    int mbcMode;
-    unsigned char cartType;
-    unsigned char checkSum;
-    unsigned char sizeEnum;
+    uint32_t mbcMode;
+    uint32_t cartType;
+    uint32_t checkSum;
+    uint32_t sizeEnum;
 };

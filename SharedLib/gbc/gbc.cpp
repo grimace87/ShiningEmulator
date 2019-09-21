@@ -14,40 +14,53 @@
 extern DebugWindowModule debugger;
 #endif
 
-uint32_t stockPaletteBg[4] = { 0xffffffff, 0xff88b0b0, 0xff507878, 0xff000000 };
-uint32_t stockPaletteObj1[4] = { 0xffffffff, 0xff5050f0, 0xff2020a0, 0xff000000 };
-uint32_t stockPaletteObj2[4] = { 0xffffffff, 0xffa0a0a0, 0xff404040, 0xff000000 };
+uint32_t stockPaletteBg[4] = { 0xffffffffU, 0xff88b0b0U, 0xff507878U, 0xff000000U };
+uint32_t stockPaletteObj1[4] = { 0xffffffffU, 0xff5050f0U, 0xff2020a0U, 0xff000000U };
+uint32_t stockPaletteObj2[4] = { 0xffffffffU, 0xffa0a0a0U, 0xff404040U, 0xff000000U };
 
-#define GPU_HBLANK    0x00
-#define GPU_VBLANK    0x01
-#define GPU_SCAN_OAM  0x02
-#define GPU_SCAN_VRAM 0x03
+#define GPU_HBLANK    0x00U
+#define GPU_VBLANK    0x01U
+#define GPU_SCAN_OAM  0x02U
+#define GPU_SCAN_VRAM 0x03U
 
 #define GB_FREQ  4194304
 #define SGB_FREQ 4295454
 #define GBC_FREQ 8400000
 
-const unsigned char OFFICIAL_LOGO[48] = {
-        0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d,
-        0x00, 0x08, 0x11, 0x1f, 0x88, 0x89, 0x00, 0x0e, 0xdc, 0xcc, 0x6e, 0xe6, 0xdd, 0xdd, 0xd9, 0x99,
-        0xbb, 0xbb, 0x67, 0x63, 0x6e, 0x0e, 0xec, 0xcc, 0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e
+const uint8_t OFFICIAL_LOGO[48] = {
+        0xceU, 0xedU, 0x66U, 0x66U, 0xccU, 0x0dU, 0x00U, 0x0bU, 0x03U, 0x73U, 0x00U, 0x83U, 0x00U, 0x0cU, 0x00U, 0x0dU,
+        0x00U, 0x08U, 0x11U, 0x1fU, 0x88U, 0x89U, 0x00U, 0x0eU, 0xdcU, 0xccU, 0x6eU, 0xe6U, 0xddU, 0xddU, 0xd9U, 0x99U,
+        0xbbU, 0xbbU, 0x67U, 0x63U, 0x6eU, 0x0eU, 0xecU, 0xccU, 0xddU, 0xdcU, 0x99U, 0x9fU, 0xbbU, 0xb9U, 0x33U, 0x3eU
 };
 
 Gbc::Gbc() {
+
+    // Initialise vars, many will be overwritten when reset() is called
+    cpuPc = cpuSp = 0;
+    cpuA = cpuB = cpuC = cpuD = cpuE = cpuF = cpuH = cpuL = 0;
+    clocksAcc = clocksRun = 0;
+    cpuClockFreq = 1;
+    cpuDividerCount = 1;
+    gpuClockFactor = 1;
+    gpuTimeInMode = 0;
+    cpuHalted = cpuStopped = blankedScreen = false;
+    needClear = true;
+    gpuMode = GPU_VBLANK;
+
     // Flag not running and no ROM loaded
     running = false;
     romProperties.valid = false;
-    clockMultiply = 1;
+    clockMultiply = 2;
     clockDivide = 1;
 
     // Allocate emulated RAM
-    rom = new unsigned char[256 * 16384];
-    wram = new unsigned char[4 * 4096];
-    vram = new unsigned char[2 * 8192];
-    ioPorts = new unsigned char[256];
+    rom = new uint8_t[256 * 16384];
+    wram = new uint8_t[4 * 4096];
+    vram = new uint8_t[2 * 8192];
+    ioPorts = new uint8_t[256];
     tileSet = new unsigned int[2 * 384 * 8 * 8]; // 2 VRAM banks, 384 tiles, 8 rows, 8 pixels per row
     sgb.monoData = new unsigned int[160 * 152];
-    sgb.mappedVramForTrnOp = new unsigned char[4096];
+    sgb.mappedVramForTrnOp = new uint8_t[4096];
     sgb.palettes = new unsigned int[4 * 4];
     sgb.sysPalettes = new unsigned int[512 * 4]; // 512 palettes, 4 colours per palette, RGB
     sgb.chrPalettes = new unsigned int[18 * 20];
@@ -73,7 +86,7 @@ Gbc::~Gbc() {
     delete[] sgb.chrPalettes;
 }
 
-void Gbc::throwException(unsigned char instruction) {
+void Gbc::throwException(uint8_t instruction) {
     //std::string msg = "Illegal operation - " + std::to_string((int)instruction);
     //throw new std::runtime_error(msg);
 }
@@ -82,7 +95,8 @@ void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
     static int noClocks = 0;
     if (running) {
         // Determine how many clock cycles to emulate, cap at 1000000 (about a quarter of a second)
-        noClocks += (int)((double)timeDiffMillis * 0.001 * (double)(cpuClockFreq * clockMultiply / clockDivide));
+        const int adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
+        noClocks += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
         if (noClocks > 1000000) {
             noClocks = 1000000;
         }
@@ -104,7 +118,7 @@ void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
     }
 }
 
-bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLength, AppPlatform& appPlatform) {
+bool Gbc::loadRom(std::string fileName, const uint8_t* data, int dataLength, AppPlatform& appPlatform) {
     if (data == nullptr || dataLength < 32768) {
         romProperties.valid = false;
         return false;
@@ -123,7 +137,7 @@ bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLengt
 
     // Game title at 0x0134 (15 bytes), note last byte is colour compatibility
     memcpy(romProperties.title, data + 0x0134, 16);
-    unsigned char lastByte = romProperties.title[15];
+    uint8_t lastByte = romProperties.title[15];
     if ((lastByte == 0x80) || (lastByte == 0xc0)) {
         romProperties.cgbFlag = true;
         romProperties.title[11] = '\0';
@@ -134,13 +148,10 @@ bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLengt
 
     // Next two bytes are licensee codes
     // Then is an SGB flag, cartridge type, and cartridge ROM and RAM sizes
-    romProperties.sgbFlag = data[0x0146];
+    romProperties.sgbFlag = data[0x0146] == 0x03U;
     romProperties.cartType = data[0x0147];
     romProperties.sizeEnum = data[0x0148];
     sram.sizeEnum = data[0x0149];
-    if (romProperties.sgbFlag != 0x03) {
-        romProperties.sgbFlag = 0x00;
-    }
 
     // Get ROM MBC type and other features based on cartridge type enum
     romProperties.hasSram = false;
@@ -265,7 +276,7 @@ bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLengt
             break;
         case 0x03:
             romProperties.sizeBytes = 262144;
-            romProperties.bankSelectMask = 0x0f;
+            romProperties.bankSelectMask = 0x0fU;
             break;
         case 0x04:
             romProperties.sizeBytes = 524288;
@@ -277,7 +288,7 @@ bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLengt
             break;
         case 0x06:
             romProperties.sizeBytes = 2097152;
-            romProperties.bankSelectMask = 0x7f;
+            romProperties.bankSelectMask = 0x7fU;
             break;
         case 0x07:
             romProperties.sizeBytes = 4194304;
@@ -285,15 +296,15 @@ bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLengt
             break;
         case 0x52:
             romProperties.sizeBytes = 1179648;
-            romProperties.bankSelectMask = 0x7f;
+            romProperties.bankSelectMask = 0x7fU;
             break;
         case 0x53:
             romProperties.sizeBytes = 1310720;
-            romProperties.bankSelectMask = 0x7f;
+            romProperties.bankSelectMask = 0x7fU;
             break;
         case 0x54:
             romProperties.sizeBytes = 1572864;
-            romProperties.bankSelectMask = 0x7f;
+            romProperties.bankSelectMask = 0x7fU;
             break;
         default:
             romProperties.valid = false;
@@ -332,7 +343,7 @@ bool Gbc::loadRom(std::string fileName, const unsigned char* data, int dataLengt
     // Check the checksum; using bytes 0x0134 to 0x014c, apply x = x - mem[addr] - 1 (starting x = 0)
     unsigned int sum = 0;
     for (int n = 0; n < 25; n++) {
-        unsigned char testByte = data[0x0134 + n];
+        uint8_t testByte = data[0x0134 + n];
         sum = sum - (unsigned int)testByte - 1;
     }
     if (sum % 256 != (unsigned int)romProperties.checkSum) {
@@ -382,7 +393,6 @@ void Gbc::reset() {
 	debugger.breakCode = 0;
 #endif
 
-
     // Resetting IO ports may avoid graphical glitches when switching to a colour game. Clearing VRAM may help too.
     std::fill(ioPorts, ioPorts + 256, 0);
     std::fill(vram, vram + 16384, 0);
@@ -398,19 +408,19 @@ void Gbc::reset() {
     cpuC = 0x13;
     cpuD = 0x00;
     cpuE = 0xd8;
-    cpuH = 0x01;
+    cpuH = 0x01U;
     cpuL = 0x4d;
     ioPorts[5] = 0x00;
     ioPorts[6] = 0x00;
     ioPorts[7] = 0x00;
-    ioPorts[16] = 0x80;
+    ioPorts[16] = 0x80U;
     ioPorts[17] = 0xbf;
     ioPorts[18] = 0xf3;
     ioPorts[20] = 0xbf;
     ioPorts[22] = 0x3f;
     ioPorts[23] = 0x00;
     ioPorts[25] = 0xbf;
-    ioPorts[26] = 0x7f;
+    ioPorts[26] = 0x7fU;
     ioPorts[27] = 0xff;
     ioPorts[28] = 0x9f;
     ioPorts[30] = 0xbf;
@@ -447,7 +457,7 @@ void Gbc::reset() {
         cpuClockFreq = SGB_FREQ;
         gpuClockFactor = 1;
         readLine = &Gbc::readLineSgb;
-        cpuA = 0x01;
+        cpuA = 0x01U;
         ioPorts[38] = 0xf0;
         sgb.readingCommand = false;
         sgb.freezeScreen = false;
@@ -463,7 +473,7 @@ void Gbc::reset() {
         cpuClockFreq = GB_FREQ;
         gpuClockFactor = 1;
         readLine = &Gbc::readLineGb;
-        cpuA = 0x01;
+        cpuA = 0x01U;
         ioPorts[38] = 0xf1;
         sgb.freezeScreen = false;
         sgb.multEnabled = false;
@@ -494,9 +504,8 @@ void Gbc::resume() {
 }
 
 int Gbc::execute(int ticks) {
-    unsigned char instr, msb, lsb, interruptable;
     int startClocksAcc;
-    int displayEnabled;
+    bool displayEnabled;
 
     // Increment clocks accumulator
     clocksAcc += ticks;
@@ -505,16 +514,16 @@ int Gbc::execute(int ticks) {
     // Handle key state if required
     if (keyStateChanged) {
         // Adjust value in keypad register
-        if ((ioPorts[0x00] & 0x30) == 0x20) {
-            ioPorts[0x00] &= 0xf0;
+        if ((ioPorts[0x00] & 0x30U) == 0x20) {
+            ioPorts[0x00] &= 0xf0U;
             ioPorts[0x00] |= keys.keyDir;
-        } else if ((ioPorts[0x00] & 0x30) == 0x10) {
-            ioPorts[0x00] &= 0xf0;
+        } else if ((ioPorts[0x00] & 0x30U) == 0x10U) {
+            ioPorts[0x00] &= 0xf0U;
             ioPorts[0x00] |= keys.keyBut;
         }
 
         // Set interrupt request flag
-        ioPorts[0x0f] |= 0x10;
+        ioPorts[0x0f] |= 0x10U;
         keyStateChanged = false;
     }
 
@@ -526,112 +535,98 @@ int Gbc::execute(int ticks) {
         }
 #endif
 
-        instr = read8(cpuPc);
-        msb = read8(cpuPc + 1);
-        lsb = read8(cpuPc + 2);
-
         // Run appropriate RunOp function, depending on opcode
         // Pass three bytes in case all are needed, sets PC increment and clocks taken
         unsigned int clocksSub = performOp();
-        cpuPc &= 0xffff; // Clamp PC to 16 bits
+        cpuPc &= 0xffffU; // Clamp PC to 16 bits
         clocksAcc -= clocksSub; // Dependent on instruction run
         clocksRun += clocksSub;
 
         // Check for interrupts:
         if (cpuIme || cpuHalted) {
-            msb = ioPorts[0xff];
-            if (msb != 0x00) {
-                lsb = ioPorts[0x0f];
-                if (lsb != 0x00) {
-                    interruptable = msb & lsb;
-                    if ((interruptable & 0x01) != 0x00) {
+            uint8_t msb = ioPorts[0xff];
+            if (msb) {
+                uint8_t lsb = ioPorts[0x0f];
+                if (lsb) {
+                    uint8_t interruptable = msb & lsb;
+                    if (interruptable & 0x01U) {
                         // VBlank
                         if (cpuHalted) {
                             cpuPc++;
                         }
                         cpuHalted = false;
                         if (!cpuIme) {
-                            instr = read8(cpuPc);
                             goto end_of_int_check;
                         }
                         cpuIme = false;
-                        ioPorts[0x0f] &= 0x1e;
+                        ioPorts[0x0f] &= 0x1eU;
                         cpuSp -= 2; // Pushing PC onto stack
-                        write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
                         cpuPc = 0x0040;
-                        instr = read8(cpuPc);
                         goto end_of_int_check;
                     }
-                    if ((interruptable & 0x02) != 0x00) {
+                    if (interruptable & 0x02U) {
                         // LCD Stat
                         if (cpuHalted) {
                             cpuPc++;
                         }
                         cpuHalted = false;
                         if (!cpuIme) {
-                            instr = read8(cpuPc);
                             goto end_of_int_check;
                         }
                         cpuIme = false;
-                        ioPorts[0x0f] &= 0x1d;
+                        ioPorts[0x0f] &= 0x1dU;
                         cpuSp -= 2;
-                        write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
                         cpuPc = 0x0048;
-                        instr = read8(cpuPc);
                         goto end_of_int_check;
                     }
-                    if ((interruptable & 0x04) != 0x00) {
+                    if (interruptable & 0x04U) {
                         // Timer
                         if (cpuHalted) {
                             cpuPc++;
                         }
                         cpuHalted = false;
                         if (!cpuIme) {
-                            instr = read8(cpuPc);
                             goto end_of_int_check;
                         }
                         cpuIme = false;
-                        ioPorts[0x0f] &= 0x1b;
+                        ioPorts[0x0f] &= 0x1bU;
                         cpuSp -= 2;
-                        write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
                         cpuPc = 0x0050;
-                        instr = read8(cpuPc);
                         goto end_of_int_check;
                     }
-                    if ((interruptable & 0x08) != 0x00) {
+                    if (interruptable & 0x08U) {
                         // Serial
                         if (cpuHalted) {
                             cpuPc++;
                         }
                         cpuHalted = false;
                         if (!cpuIme) {
-                            instr = read8(cpuPc);
                             goto end_of_int_check;
                         }
                         cpuIme = false;
-                        ioPorts[0x0f] &= 0x17;
+                        ioPorts[0x0f] &= 0x17U;
                         cpuSp -= 2;
-                        write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
                         cpuPc = 0x0058;
-                        instr = read8(cpuPc);
                         goto end_of_int_check;
                     }
-                    if ((interruptable & 0x10) != 0x00) {
+                    if (interruptable & 0x10U) {
                         // Joypad
                         if (cpuHalted) {
                             cpuPc++;
                         }
                         cpuHalted = false;
                         if (!cpuIme) {
-                            instr = read8(cpuPc);
                             goto end_of_int_check;
                         }
                         cpuIme = false;
-                        ioPorts[0x0f] &= 0x0f;
+                        ioPorts[0x0f] &= 0x0fU;
                         cpuSp -= 2;
-                        write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
                         cpuPc = 0x0060;
-                        instr = read8(cpuPc);
                         goto end_of_int_check;
                     }
                 }
@@ -647,18 +642,18 @@ int Gbc::execute(int ticks) {
         }
 #endif
 
-        displayEnabled = ioPorts[0x0040] & 0x80;
+        displayEnabled = ioPorts[0x0040] & 0x80U;
 
         // Permanent compare of LY and LYC
-        if ((ioPorts[0x44] == ioPorts[0x45]) && (displayEnabled != 0)) {
-            ioPorts[0x41] |= 0x04; // Set coincidence flag
+        if ((ioPorts[0x44] == ioPorts[0x45]) && displayEnabled) {
+            ioPorts[0x41] |= 0x04U; // Set coincidence flag
             // Request interrupt if this signal goes low to high
-            if (((ioPorts[0x41] & 0x40) != 0x00) && (lastLYCompare == 0)) {
-                ioPorts[0x0f] |= 0x02;
+            if (((ioPorts[0x41] & 0x40U) != 0x00) && (lastLYCompare == 0)) {
+                ioPorts[0x0f] |= 0x02U;
             }
             lastLYCompare = 1;
         } else {
-            ioPorts[0x41] &= 0xfb; // Clear coincidence flag
+            ioPorts[0x41] &= 0xfbU; // Clear coincidence flag
             lastLYCompare = 0;
         }
 
@@ -675,7 +670,7 @@ int Gbc::execute(int ticks) {
                 ioPorts[0x05]++;
                 if (ioPorts[0x05] == 0x00) {
                     ioPorts[0x05] = ioPorts[0x06];
-                    ioPorts[0x0f] |= 0x04;
+                    ioPorts[0x0f] |= 0x04U;
                 }
             }
         }
@@ -685,35 +680,20 @@ int Gbc::execute(int ticks) {
             if (!serialClockIsExternal) {
                 serialTimer -= clocksSub;
                 if (serialTimer <= 0) {
-                    serialIsTransferring = 0;
-                    ioPorts[0x02] &= 0x03; // Clear the transferring indicator
-                    ioPorts[0x0f] |= 0x08; // Request a serial interrupt
-                    /*if (ggbc2.Running != 0) {
-                        mem.RequestSerial = 1;
-                        gpu.TimeInMode += clocks_sub / GPU_ClockFactor; // Don't skip the LCD timer
-                        StartClockAcc -= clocks_acc;
-                        clocks_acc = 0;
-                        return StartClockAcc;
-                    }
-                    else*/
-                    ioPorts[1] = 0xff;
+                    serialIsTransferring = false;
+                    ioPorts[0x02] &= 0x03U; // Clear the transferring indicator
+                    ioPorts[0x0f] |= 0x08U; // Request a serial interrupt
+                    ioPorts[1] = 0xffU;
                 }
             } else {
                 if (serialTimer == 1) {
                     serialTimer = 0;
-                    /*if (ggbc2.Running != 0) {
-                        mem.RequestSerial = 1;
-                        gpu.TimeInMode += clocks_sub / GPU_ClockFactor; // Don't skip the LCD timer
-                        StartClockAcc -= clocks_acc;
-                        clocks_acc = 0;
-                        return StartClockAcc;
-                    }*/
                 }
             }
         }
 
         // Handle GPU timings
-        if (displayEnabled != 0) {
+        if (displayEnabled) {
             gpuTimeInMode += clocksSub / gpuClockFactor; // GPU clock factor accounts for double speed mode
             switch (gpuMode) {
                 case GPU_HBLANK:
@@ -723,21 +703,18 @@ int Gbc::execute(int ticks) {
                         ioPorts[0x0044]++;
                         if (ioPorts[0x0044] == 144) {
                             gpuMode = GPU_VBLANK;
-                            ioPorts[0x0041] &= 0xfc; // address 0xff41 - LCD status register
+                            ioPorts[0x0041] &= 0xfcU;
                             ioPorts[0x0041] |= GPU_VBLANK;
-                            if (displayEnabled) {
-                                // Set interrupt request for VBLANK
-                                ioPorts[0x000f] |= 0x01;
-                            }
+                            // Set interrupt request for VBLANK
+                            ioPorts[0x000f] |= 0x01U;
                             accessOam = true;
                             accessVram = true;
-
-                            if ((ioPorts[0x0041] & 0x10) != 0x00) {
+                            if ((ioPorts[0x0041] & 0x10U) != 0x00) {
                                 // Request status int if condition met
-                                ioPorts[0x000f] |= 0x02;
+                                ioPorts[0x000f] |= 0x02U;
                             }
                             // This is where stuff can be drawn - on the beginning of the vblank
-                            if (!sgb.freezeScreen && (displayEnabled != 0)) {
+                            if (!sgb.freezeScreen) {
                                 if (frameManager.frameIsInProgress()) {
                                     auto frameBuffer = frameManager.getInProgressFrameBuffer();
                                     if ((frameBuffer != nullptr) && romProperties.sgbFlag) {
@@ -751,15 +728,13 @@ int Gbc::execute(int ticks) {
                             }
                         } else {
                             gpuMode = GPU_SCAN_OAM;
-                            ioPorts[0x0041] &= 0xfc;
+                            ioPorts[0x0041] &= 0xfcU;
                             ioPorts[0x0041] |= GPU_SCAN_OAM;
-                            if (displayEnabled) {
-                                accessOam = false;
-                                accessVram = true;
-                            }
-                            if ((ioPorts[0x0041] & 0x20) != 0x00) {
+                            accessOam = false;
+                            accessVram = true;
+                            if (ioPorts[0x0041] & 0x20U) {
                                 // Request status int if condition met
-                                ioPorts[0x000f] |= 0x02;
+                                ioPorts[0x000f] |= 0x02U;
                             }
                         }
                     }
@@ -771,16 +746,14 @@ int Gbc::execute(int ticks) {
                         ioPorts[0x0044]++;
                         if (ioPorts[0x0044] >= 154) {
                             gpuMode = GPU_SCAN_OAM;
-                            ioPorts[0x0041] &= 0xfc;
+                            ioPorts[0x0041] &= 0xfcU;
                             ioPorts[0x0041] |= GPU_SCAN_OAM;
                             ioPorts[0x0044] = 0;
-                            if (displayEnabled) {
-                                accessOam = false;
-                                accessVram = true;
-                            }
-                            if ((ioPorts[0x0041] & 0x20) != 0x00) {
+                            accessOam = false;
+                            accessVram = true;
+                            if (ioPorts[0x0041] & 0x20U) {
                                 // Request status int if condition met
-                                ioPorts[0x000f] |= 0x02;
+                                ioPorts[0x000f] |= 0x02U;
                             }
 
                             // LCD starting at top of frame, ready a frame buffer if available
@@ -792,53 +765,51 @@ int Gbc::execute(int ticks) {
                     if (gpuTimeInMode >= 80) {
                         gpuTimeInMode -= 80;
                         gpuMode = GPU_SCAN_VRAM;
-                        ioPorts[0x0041] &= 0xfc;
+                        ioPorts[0x0041] &= 0xfcU;
                         ioPorts[0x0041] |= GPU_SCAN_VRAM;
-                        if (displayEnabled) {
-                            accessOam = false;
-                            accessVram = false;
-                        }
+                        accessOam = false;
+                        accessVram = false;
                     }
                     break;
                 case GPU_SCAN_VRAM:
                     if (gpuTimeInMode >= 172) {
                         gpuTimeInMode -= 172;
                         gpuMode = GPU_HBLANK;
-                        ioPorts[0x0041] &= 0xfc;
+                        ioPorts[0x0041] &= 0xfcU;
                         ioPorts[0x0041] |= GPU_HBLANK;
                         accessOam = true;
                         accessVram = true;
-                        if ((ioPorts[0x0041] & 0x08) != 0x00) {
+                        if (ioPorts[0x0041] & 0x08U) {
                             // Request status int if condition met
-                            ioPorts[0x000f] |= 0x02;
+                            ioPorts[0x000f] |= 0x02U;
                         }
                         // Run DMA if applicable
                         if (ioPorts[0x55] < 0xff) {
                             unsigned int tempAddr, tempAddr2;
                             // H-blank DMA currently active
-                            tempAddr = (ioPorts[0x51] << 8) + ioPorts[0x52]; // DMA source
-                            if ((tempAddr & 0xe000) == 0x8000) {
+                            tempAddr = (ioPorts[0x51] << 8U) + ioPorts[0x52]; // DMA source
+                            if ((tempAddr & 0xe000U) == 0x8000U) {
                                 // Don't do transfers within VRAM
                                 goto end_dma_op;
                             }
-                            if (tempAddr >= 0xe000) {
+                            if (tempAddr >= 0xe000U) {
                                 // Don't take source data from these addresses either
                                 goto end_dma_op;
                             }
-                            tempAddr2 = (ioPorts[0x53] << 8) + ioPorts[0x54] + 0x8000; // DMA destination
+                            tempAddr2 = (ioPorts[0x53] << 8U) + ioPorts[0x54] + 0x8000U; // DMA destination
                             for (int count = 0; count < 16; count++) {
                                 write8(tempAddr2, read8(tempAddr));
                                 tempAddr++;
                                 tempAddr2++;
-                                tempAddr2 &= 0x9fff; // Keep it within VRAM
+                                tempAddr2 &= 0x9fffU; // Keep it within VRAM
                             }
                             end_dma_op:
                             //if (ClockFreq == GBC_FREQ) clocks_acc -= 64;
                             //else clocks_acc -= 32;
                             ioPorts[0x55]--;
-                            if (ioPorts[0x55] < 0x80) {
+                            if (ioPorts[0x55] < 0x80U) {
                                 // End the DMA
-                                ioPorts[0x55] = 0xff;
+                                ioPorts[0x55] = 0xffU;
                             }
                         }
 
@@ -878,8 +849,8 @@ int Gbc::execute(int ticks) {
     return startClocksAcc;
 }
 
-unsigned char Gbc::read8(unsigned int address) {
-    address &= 0xffff;
+uint8_t Gbc::read8(unsigned int address) {
+    address &= 0xffffU;
 #ifdef _WIN32
     if (debugger.breakOnRead) {
         if ((address == debugger.breakReadAddr) && (debugger.breakCode != 5)) {
@@ -889,27 +860,27 @@ unsigned char Gbc::read8(unsigned int address) {
     }
 #endif
 
-    if (address < 0x4000) {
+    if (address < 0x4000U) {
         return rom[address];
-    } else if (address < 0x8000) {
-        return rom[bankOffset + (address & 0x3fff)];
-    } else if (address < 0xa000) {
+    } else if (address < 0x8000U) {
+        return rom[bankOffset + (address & 0x3fffU)];
+    } else if (address < 0xa000U) {
         if (accessVram) {
-            return vram[vramBankOffset + (address & 0x1fff)];
+            return vram[vramBankOffset + (address & 0x1fffU)];
         } else {
-            return 0xff;
+            return 0xffU;
         }
     }
-    else if (address < 0xc000) {
+    else if (address < 0xc000U) {
         if (sram.enableFlag) {
             if (!sram.hasTimer) {
-                return sram.read(address & 0x1fff);
+                return sram.read(address & 0x1fffU);
             } else {
                 /*if (sram.timerMode > 0)
                     return sram.timerData[(unsigned int)sram.timerMode - 0x08];
                 else */
-                if (sram.bankOffset < 0x8000) {
-                    return sram.read(address & 0x1fff);
+                if (sram.bankOffset < 0x8000U) {
+                    return sram.read(address & 0x1fffU);
                 } else {
                     return 0;
                 }
@@ -917,79 +888,79 @@ unsigned char Gbc::read8(unsigned int address) {
         } else {
             return 0x00;
         }
-    } else if (address < 0xd000) {
-        return wram[address & 0x0fff];
-    } else if (address < 0xe000) {
-        return wram[wramBankOffset + (address & 0x0fff)];
-    } else if (address < 0xf000) {
-        return wram[address & 0x0fff];
-    } else if (address < 0xfe00) {
-        return wram[wramBankOffset + (address & 0x0fff)];
-    } else if (address < 0xfea0) {
+    } else if (address < 0xd000U) {
+        return wram[address & 0x0fffU];
+    } else if (address < 0xe000U) {
+        return wram[wramBankOffset + (address & 0x0fffU)];
+    } else if (address < 0xf000U) {
+        return wram[address & 0x0fffU];
+    } else if (address < 0xfe00U) {
+        return wram[wramBankOffset + (address & 0x0fffU)];
+    } else if (address < 0xfea0U) {
         if (accessOam) {
-            return oam[(address & 0x00ff) % 160];
+            return oam[(address & 0x00ffU) % 160];
         } else {
-            return 0xff;
+            return 0xffU;
         }
-    } else if (address < 0xff00) {
+    } else if (address < 0xff00U) {
         return 0xff;
-    } else if (address < 0xff80) {
-        return readIO(address & 0x7f);
+    } else if (address < 0xff80U) {
+        return readIO(address & 0x7fU);
     } else {
-        return ioPorts[(address & 0xff)];
+        return ioPorts[(address & 0xffU)];
     }
 }
 
-void Gbc::read16(unsigned int address, unsigned char* msb, unsigned char* lsb) {
-    address &= 0xffff;
-    if (address < 0x4000) {
+void Gbc::read16(unsigned int address, uint8_t* msb, uint8_t* lsb) {
+    address &= 0xffffU;
+    if (address < 0x4000U) {
         *msb = rom[address];
         *lsb = rom[address + 1];
         return;
-    } else if (address < 0x8000) {
-        *msb = rom[bankOffset + (address & 0x3fff)];
-        *lsb = rom[bankOffset + ((address + 1) & 0x3fff)];
+    } else if (address < 0x8000U) {
+        *msb = rom[bankOffset + (address & 0x3fffU)];
+        *lsb = rom[bankOffset + ((address + 1) & 0x3fffU)];
         return;
-    } else if (address < 0xa000) {
+    } else if (address < 0xa000U) {
         if (accessVram) {
-            *msb = vram[vramBankOffset + (address & 0x1fff)];
-            *lsb = vram[vramBankOffset + ((address + 1) & 0x1fff)];
+            *msb = vram[vramBankOffset + (address & 0x1fffU)];
+            *lsb = vram[vramBankOffset + ((address + 1) & 0x1fffU)];
             return;
         } else {
-            *msb = 0xff;
-            *lsb = 0xff;
+            *msb = 0xffU;
+            *lsb = 0xffU;
             return;
         }
-    } else if (address < 0xc000) {
+    } else if (address < 0xc000U) {
         if (sram.enableFlag) {
             *msb = sram.read(address);
             *lsb = sram.read(address + 1);
             return;
         } else {
-            *msb = 0xff;
-            *lsb = 0xff;
+            *msb = 0xffU;
+            *lsb = 0xffU;
             return;
         }
-    } else if (address < 0xd000) {
-        *msb = wram[address & 0x0fff];
-        *lsb = wram[(address + 1) & 0x0fff];
+    } else if (address < 0xd000U) {
+        *msb = wram[address & 0x0fffU];
+        *lsb = wram[(address + 1) & 0x0fffU];
         return;
-    } else if (address < 0xe000) {
-        *msb = wram[wramBankOffset + (address & 0x0fff)];
-        *lsb = wram[wramBankOffset + ((address + 1) & 0x0fff)];
+    } else if (address < 0xe000U) {
+        *msb = wram[wramBankOffset + (address & 0x0fffU)];
+        *lsb = wram[wramBankOffset + ((address + 1) & 0x0fffU)];
         return;
-    } else if (address < 0xf000) {
-        *msb = wram[address & 0x0fff];
-        *lsb = wram[(address + 1) & 0x0fff];
+    } else if (address < 0xf000U) {
+        *msb = wram[address & 0x0fffU];
+        *lsb = wram[(address + 1) & 0x0fffU];
         return;
-    } else if (address < 0xfe00) {
-        *msb = wram[wramBankOffset + (address & 0x0fff)];
-        *lsb = wram[wramBankOffset + ((address + 1) & 0x0fff)];
+    } else if (address < 0xfe00U) {
+        *msb = wram[wramBankOffset + (address & 0x0fffU)];
+        *lsb = wram[wramBankOffset + ((address + 1) & 0x0fffU)];
         return;
-    } else if (address < 0xfea0) {
+    } else if (address < 0xfea0U) {
         if (accessOam) {
-            *msb = oam[(address & 0x00ff) % 160];
-            *lsb = oam[((address + 1) & 0x00ff) % 160];
+            *msb = oam[(address & 0x00ffU) % 160];
+            *lsb = oam[((address + 1) & 0x00ffU) % 160];
             return;
         } else {
             *msb = 0xff;
@@ -1001,18 +972,18 @@ void Gbc::read16(unsigned int address, unsigned char* msb, unsigned char* lsb) {
         *lsb = 0xff;
         return;
     } else if (address < 0xff80) {
-        *msb = readIO(address & 0x7f);
-        *lsb = readIO((address + 1) & 0x7f);
+        *msb = readIO(address & 0x7fU);
+        *lsb = readIO((address + 1) & 0x7fU);
         return;
     } else {
-        *msb = ioPorts[address & 0xff];
-        *lsb = ioPorts[(address + 1) & 0xff];
+        *msb = ioPorts[address & 0xffU];
+        *lsb = ioPorts[(address + 1) & 0xffU];
         return;
     }
 }
 
-void Gbc::write8(unsigned int address, unsigned char byte) {
-    address &= 0xffff;
+void Gbc::write8(unsigned int address, uint8_t byte) {
+    address &= 0xffffU;
 #ifdef _WIN32
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
@@ -1021,62 +992,62 @@ void Gbc::write8(unsigned int address, unsigned char byte) {
         }
     }
 #endif
-    if (address < 0x8000) {
+    if (address < 0x8000U) {
         switch (romProperties.mbc) {
             case MBC1:
-                if (address < 0x2000) {
+                if (address < 0x2000U) {
                     // Only 4 bits are used. Writing 0xa enables SRAM
-                    byte = byte & 0x0f;
-                    sram.enableFlag = byte == 0x0a;
+                    byte = byte & 0x0fU;
+                    sram.enableFlag = byte == 0x0aU;
                     return;
-                } else if (address < 0x4000) {
+                } else if (address < 0x4000U) {
                     // Set low 5 bits of bank number
-                    bankOffset &= 0xfff80000;
-                    byte = byte & 0x1f;
+                    bankOffset &= 0xfff80000U;
+                    byte = byte & 0x1fU;
                     if (byte == 0x00) {
                         byte++;
                     }
-                    bankOffset |= ((unsigned int)byte * 0x4000);
+                    bankOffset |= ((unsigned int)byte * 0x4000U);
                     return;
-                } else if (address < 0x6000) {
-                    byte &= 0x03;
+                } else if (address < 0x6000U) {
+                    byte &= 0x03U;
                     if (romProperties.mbcMode != 0) {
-                        sram.bankOffset = (unsigned int)byte * 0x2000; // Select RAM bank
+                        sram.bankOffset = (unsigned int)byte * 0x2000U; // Select RAM bank
                     } else {
-                        bankOffset &= 0xffe7c000;
-                        bankOffset |= (unsigned int)byte * 0x80000;
+                        bankOffset &= 0xffe7c000U;
+                        bankOffset |= (unsigned int)byte * 0x80000U;
                     }
                     return;
                 } else {
                     if (sram.sizeBytes > 8192) {
-                        romProperties.mbcMode = byte & 0x01;
+                        romProperties.mbcMode = byte & 0x01U;
                     } else {
                         romProperties.mbcMode = 0;
                     }
                     return;
                 }
             case MBC2:
-                if (address < 0x1000) {
+                if (address < 0x1000U) {
                     // Only 4 bits are used. Writing 0xa enables SRAM.
-                    byte = byte & 0x0f;
-                    sram.enableFlag = byte == 0x0a;
+                    byte = byte & 0x0fU;
+                    sram.enableFlag = byte == 0x0aU;
                     return;
-                } else if (address < 0x2100) {
+                } else if (address < 0x2100U) {
                     return;
-                } else if (address < 0x21ff) {
-                    byte &= 0x0f;
+                } else if (address < 0x21ffU) {
+                    byte &= 0x0fU;
                     byte &= romProperties.bankSelectMask;
                     if (byte == 0) {
                         byte++;
                     }
-                    bankOffset = (unsigned int)byte * 0x4000;
+                    bankOffset = (unsigned int)byte * 0x4000U;
                     return;
                 }
                 return;
             case MBC3:
-                if (address < 0x2000) {
-                    byte = byte & 0x0f;
-                    sram.enableFlag = byte == 0x0a; // Also enables timer registers
+                if (address < 0x2000U) {
+                    byte = byte & 0x0fU;
+                    sram.enableFlag = byte == 0x0aU; // Also enables timer registers
 #ifdef _WIN32
                     if (sram.enableFlag) {
                         if (debugger.breakOnSramEnable) {
@@ -1089,27 +1060,27 @@ void Gbc::write8(unsigned int address, unsigned char byte) {
                     }
 #endif
                     return;
-                } else if (address < 0x4000) {
+                } else if (address < 0x4000U) {
                     byte &= romProperties.bankSelectMask;
                     if (byte == 0) {
                         byte++;
                     }
-                    bankOffset = (unsigned int)byte * 0x4000;
+                    bankOffset = (unsigned int)byte * 0x4000U;
                     return;
-                } else if (address < 0x6000) {
-                    byte &= 0x0f;
-                    if (byte < 0x04) {
-                        sram.bankOffset = (unsigned int)byte * 0x2000;
+                } else if (address < 0x6000U) {
+                    byte &= 0x0fU;
+                    if (byte < 0x04U) {
+                        sram.bankOffset = (unsigned int)byte * 0x2000U;
                         sram.timerMode = 0;
-                    } else if ((byte >= 0x08) && (byte < 0x0d)) {
+                    } else if ((byte >= 0x08U) && (byte < 0x0dU)) {
                         sram.timerMode = (unsigned int)byte;
                     } else {
                         sram.timerMode = 0;
                     }
                     return;
                 } else {
-                    byte &= 0x01;
-                    if ((sram.timerLatch == 0x00) && (byte == 0x01)) {
+                    byte &= 0x01U;
+                    if ((sram.timerLatch == 0x00U) && (byte == 0x01U)) {
                         latchTimerData();
                     }
                     sram.timerLatch = (unsigned int)byte;
@@ -1117,106 +1088,106 @@ void Gbc::write8(unsigned int address, unsigned char byte) {
                 }
                 break;
             case MBC5:
-                if (address < 0x2000) {
-                    byte = byte & 0x0f;
-                    sram.enableFlag = byte == 0x0a;
+                if (address < 0x2000U) {
+                    byte = byte & 0x0fU;
+                    sram.enableFlag = byte == 0x0aU;
                     return;
-                } else if (address < 0x3000) {
+                } else if (address < 0x3000U) {
                     // Set lower 8 bits of 9-bit reg in MBC5
-                    bankOffset &= 0x00400000;
-                    bankOffset |= (unsigned int)byte * 0x4000;
+                    bankOffset &= 0x00400000U;
+                    bankOffset |= (unsigned int)byte * 0x4000U;
                     if (bankOffset == 0) {
                         // Only exclusion with MBC5 is bank 0
-                        bankOffset = 0x4000;
+                        bankOffset = 0x4000U;
                     }
                     return;
                 }
-                else if (address < 0x4000) {
+                else if (address < 0x4000U) {
                     // Set bit 9
-                    byte &= 0x01;
-                    bankOffset &= 0x003fc000;
-                    if (byte != 0x00) {
-                        bankOffset |= 0x00400000;
+                    byte &= 0x01U;
+                    bankOffset &= 0x003fc000U;
+                    if (byte != 0x00U) {
+                        bankOffset |= 0x00400000U;
                     }
                     if (bankOffset == 0) {
                         // Only exclusion with MBC5 is bank 0
-                        bankOffset = 0x00004000;
+                        bankOffset = 0x00004000U;
                     }
                     return;
-                } else if (address < 0x6000) {
+                } else if (address < 0x6000U) {
                     // Set 4-bit RAM bank register
-                    byte &= 0x0f;
-                    sram.bankOffset = (unsigned int)byte * 0x2000;
+                    byte &= 0x0fU;
+                    sram.bankOffset = (unsigned int)byte * 0x2000U;
                     return;
                 }
 
                 // Writing to 0x6000 - 0x7fff does nothing
                 return;
         }
-    } else if (address < 0xa000) {
+    } else if (address < 0xa000U) {
         if (accessVram) {
-            address = address & 0x1fff;
+            address = address & 0x1fffU;
             vram[vramBankOffset + address] = byte;
-            if (address < 0x1800) {
+            if (address < 0x1800U) {
                 // Pre-calculate pixels in tile set
-                address = address & 0x1ffe;
-                unsigned int byte1 = 0xff & (unsigned int)vram[vramBankOffset + address];
-                unsigned int byte2 = 0xff & (unsigned int)vram[vramBankOffset + address + 1];
+                address = address & 0x1ffeU;
+                unsigned int byte1 = 0xffU & (unsigned int)vram[vramBankOffset + address];
+                unsigned int byte2 = 0xffU & (unsigned int)vram[vramBankOffset + address + 1];
                 address = address * 4;
                 if (vramBankOffset != 0) {
                     address += 24576;
                 }
-                tileSet[address++] = ((byte2 >> 6) & 0x02) + (byte1 >> 7);
-                tileSet[address++] = ((byte2 >> 5) & 0x02) + ((byte1 >> 6) & 0x01);
-                tileSet[address++] = ((byte2 >> 4) & 0x02) + ((byte1 >> 5) & 0x01);
-                tileSet[address++] = ((byte2 >> 3) & 0x02) + ((byte1 >> 4) & 0x01);
-                tileSet[address++] = ((byte2 >> 2) & 0x02) + ((byte1 >> 3) & 0x01);
-                tileSet[address++] = ((byte2 >> 1) & 0x02) + ((byte1 >> 2) & 0x01);
-                tileSet[address++] = (byte2 & 0x02) + ((byte1 >> 1) & 0x01);
-                tileSet[address] = ((byte2 << 1) & 0x02) + (byte1 & 0x01);
+                tileSet[address++] = ((byte2 >> 6U) & 0x02U) + (byte1 >> 7U);
+                tileSet[address++] = ((byte2 >> 5U) & 0x02U) + ((byte1 >> 6U) & 0x01U);
+                tileSet[address++] = ((byte2 >> 4U) & 0x02U) + ((byte1 >> 5U) & 0x01U);
+                tileSet[address++] = ((byte2 >> 3U) & 0x02U) + ((byte1 >> 4U) & 0x01U);
+                tileSet[address++] = ((byte2 >> 2U) & 0x02U) + ((byte1 >> 3U) & 0x01U);
+                tileSet[address++] = ((byte2 >> 1U) & 0x02U) + ((byte1 >> 2U) & 0x01U);
+                tileSet[address++] = (byte2 & 0x02U) + ((byte1 >> 1U) & 0x01U);
+                tileSet[address] = ((byte2 << 1U) & 0x02U) + (byte1 & 0x01U);
             }
         }
-    } else if (address < 0xc000) {
+    } else if (address < 0xc000U) {
         if (sram.enableFlag) {
             if (sram.hasTimer) {
                 if (sram.timerMode > 0) {
                     latchTimerData();
                     sram.writeTimerData((unsigned int)sram.timerMode, byte);
                     sram.timerData[(int)(sram.timerMode - 0)] = byte;
-                } else if (sram.bankOffset < 0x8000) {
+                } else if (sram.bankOffset < 0x8000U) {
                     sram.write(address, byte);
                 }
             } else {
                 if (romProperties.mbc == MBC2) {
-                    byte &= 0x0f;
+                    byte &= 0x0fU;
                 }
                 sram.write(address, byte);
             }
         }
-    } else if (address < 0xd000) {
-        wram[address & 0x0fff] = byte;
-    } else if (address < 0xe000) {
-        wram[wramBankOffset + (address & 0x0fff)] = byte;
-    } else if (address < 0xf000) {
-        wram[address & 0x0fff] = byte;
-    } else if (address < 0xfe00) {
-        wram[wramBankOffset + (address & 0x0fff)] = byte;
-    } else if (address < 0xfea0) {
+    } else if (address < 0xd000U) {
+        wram[address & 0x0fffU] = byte;
+    } else if (address < 0xe000U) {
+        wram[wramBankOffset + (address & 0x0fffU)] = byte;
+    } else if (address < 0xf000U) {
+        wram[address & 0x0fffU] = byte;
+    } else if (address < 0xfe00U) {
+        wram[wramBankOffset + (address & 0x0fffU)] = byte;
+    } else if (address < 0xfea0U) {
         if (accessOam) {
-            oam[(address & 0x00ff) % 160] = byte;
+            oam[(address & 0x00ffU) % 160] = byte;
         }
-    } else if (address < 0xff00) {
+    } else if (address < 0xff00U) {
         return; // Unusable
-    } else if (address < 0xff80) {
-        writeIO(address & 0x007f, byte);
+    } else if (address < 0xff80U) {
+        writeIO(address & 0x007fU, byte);
     } else {
-        ioPorts[address & 0x00ff] = byte;
+        ioPorts[address & 0x00ffU] = byte;
     }
 
 }
 
-void Gbc::write16(unsigned int address, unsigned char msb, unsigned char lsb) {
-    address &= 0xffff;
+void Gbc::write16(unsigned int address, uint8_t msb, uint8_t lsb) {
+    address &= 0xffffU;
 #ifdef _WIN32
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
@@ -1228,92 +1199,92 @@ void Gbc::write16(unsigned int address, unsigned char msb, unsigned char lsb) {
         }
     }
 #endif
-    if (address < 0x8000) {
+    if (address < 0x8000U) {
         write8(address, msb);
         write8(address + 1, lsb);
-    } else if (address < 0x9fff) {
+    } else if (address < 0x9fffU) {
         if (accessVram) {
-            vram[vramBankOffset + (address & 0x1fff)] = msb;
-            vram[vramBankOffset + ((address + 1) & 0x1fff)] = lsb;
+            vram[vramBankOffset + (address & 0x1fffU)] = msb;
+            vram[vramBankOffset + ((address + 1) & 0x1fffU)] = lsb;
         }
-    } else if (address < 0xbfff) {
+    } else if (address < 0xbfffU) {
         if (sram.enableFlag) {
             if (romProperties.mbc == MBC2) {
-                msb &= 0x0f;
-                lsb &= 0x0f;
+                msb &= 0x0fU;
+                lsb &= 0x0fU;
             }
             sram.write(address, msb);
             sram.write(address + 1, lsb);
         }
-    } else if (address < 0xcfff) {
-        wram[address & 0x0fff] = msb;
-        wram[(address + 1) & 0x0fff] = lsb;
-    } else if (address < 0xdfff) {
-        wram[wramBankOffset + (address & 0x0fff)] = msb;
-        wram[wramBankOffset + ((address + 1) & 0x0fff)] = lsb;
-    } else if (address < 0xefff) {
-        wram[address & 0x0fff] = msb;
-        wram[(address + 1) & 0x0fff] = lsb;
-    } else if (address < 0xfdff) {
-        wram[wramBankOffset + (address & 0x0fff)] = msb;
-        wram[wramBankOffset + ((address + 1) & 0x0fff)] = lsb;
-    } else if (address < 0xfe9f) {
+    } else if (address < 0xcfffU) {
+        wram[address & 0x0fffU] = msb;
+        wram[(address + 1) & 0x0fffU] = lsb;
+    } else if (address < 0xdfffU) {
+        wram[wramBankOffset + (address & 0x0fffU)] = msb;
+        wram[wramBankOffset + ((address + 1) & 0x0fffU)] = lsb;
+    } else if (address < 0xefffU) {
+        wram[address & 0x0fffU] = msb;
+        wram[(address + 1) & 0x0fffU] = lsb;
+    } else if (address < 0xfdffU) {
+        wram[wramBankOffset + (address & 0x0fffU)] = msb;
+        wram[wramBankOffset + ((address + 1) & 0x0fffU)] = lsb;
+    } else if (address < 0xfe9fU) {
         if (accessOam) {
-            oam[(address & 0x00ff) % 160] = msb;
-            oam[(address & 0x00ff + 1) % 160] = lsb;
+            oam[(address & 0x00ffU) % 160] = msb;
+            oam[(address & 0x00ffU + 1) % 160] = lsb;
         }
-    } else if (address < 0xfeff) {
+    } else if (address < 0xfeffU) {
         // Unusable
         return;
-    } else if (address < 0xff7f) {
-        writeIO(address & 0x007f, msb);
-        writeIO((address + 1) & 0x007f, lsb);
+    } else if (address < 0xff7fU) {
+        writeIO(address & 0x007fU, msb);
+        writeIO((address + 1) & 0x007fU, lsb);
     } else {
-        ioPorts[address & 0x00ff] = msb;
-        ioPorts[(address + 1) & 0x00ff] = lsb;
+        ioPorts[address & 0x00ffU] = msb;
+        ioPorts[(address + 1) & 0x00ffU] = lsb;
     }
 }
 
-unsigned char Gbc::readIO(unsigned int ioIndex) {
-    unsigned char byte;
+uint8_t Gbc::readIO(unsigned int ioIndex) {
+    uint8_t byte;
     switch (ioIndex) {
         case 0x00: // Used for keypad status
-            byte = ioPorts[0] & 0x30;
-            if (byte == 0x20) {
+            byte = ioPorts[0] & 0x30U;
+            if (byte == 0x20U) {
                 return keys.keyDir; // Note that only bits 0-3 are read here
-            } else if (byte == 0x10) {
+            } else if (byte == 0x10U) {
                 return keys.keyBut;
-            } else if ((sgb.multEnabled != 0x00) && (byte == 0x30)) {
+            } else if (sgb.multEnabled && (byte == 0x30U)) {
                 return sgb.readJoypadID;
             } else {
-                return 0x0f;
+                return 0x0fU;
             }
         case 0x01: // Serial data
             return ioPorts[1];
         case 0x02: // Serial control
             return ioPorts[2];
         case 0x11: // NR11
-            return ioPorts[0x11] & 0xc0;
+            return ioPorts[0x11] & 0xc0U;
         case 0x13: // NR13
             return 0;
         case 0x14: // NR14
-            return ioPorts[0x14] & 0x40;
+            return ioPorts[0x14] & 0x40U;
         case 0x16: // NR21
-            return ioPorts[0x16] & 0xc0;
+            return ioPorts[0x16] & 0xc0U;
         case 0x18: // NR23
             return 0;
         case 0x19: // NR24
-            return ioPorts[0x19] & 0x40;
+            return ioPorts[0x19] & 0x40U;
         case 0x1a: // NR30
-            return ioPorts[0x1a] & 0x80;
+            return ioPorts[0x1a] & 0x80U;
         case 0x1c: // NR32
-            return ioPorts[0x14] & 0x60;
+            return ioPorts[0x14] & 0x60U;
         case 0x1d: // NR33
             return 0;
         case 0x1e: // NR34
-            return ioPorts[0x1e] & 0x40;
+            return ioPorts[0x1e] & 0x40U;
         case 0x23: // NR44
-            return ioPorts[0x23] & 0x40;
+            return ioPorts[0x23] & 0x40U;
         case 0x69: // CBG background palette data (using address set by 0xff68)
             if (romProperties.cgbFlag == 0) {
                 return 0;
@@ -1329,14 +1300,14 @@ unsigned char Gbc::readIO(unsigned int ioIndex) {
     }
 }
 
-void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
-    unsigned char byte;
+void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
+    uint8_t byte;
     unsigned int word, count;
     switch (ioIndex) {
-        case 0x00:
-            byte = data & 0x30;
+        case 0x00U:
+            byte = data & 0x30U;
             if (romProperties.sgbFlag) {
-                if (byte == 0x00) {
+                if (byte == 0x00U) {
                     if (!sgb.readingCommand) {
                         // Begin command packet transfer:
                         sgb.readingCommand = true;
@@ -1346,7 +1317,7 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                         sgb.noPacketsToSend = 1; // Will get amended later if needed
                     }
                     ioPorts[0] = byte;
-                } else if (byte == 0x20) {
+                } else if (byte == 0x20U) {
                     ioPorts[0] = byte;
                     ioPorts[0] |= keys.keyDir;
                     if (sgb.readingCommand) {
@@ -1372,7 +1343,7 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                             sgb.noPacketsToSend = 0;
                         }
                     }
-                } else if (byte == 0x10) {
+                } else if (byte == 0x10U) {
                     ioPorts[0] = byte;
                     ioPorts[0] |= keys.keyBut;
                     if (sgb.readingCommand) {
@@ -1388,10 +1359,10 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                             sgb.checkByte();
                         }
                     }
-                } else if ((sgb.multEnabled != 0x00) && (!sgb.readingCommand)) {
-                    if (ioPorts[0] < 0x30) {
+                } else if ((sgb.multEnabled != 0x00U) && (!sgb.readingCommand)) {
+                    if (ioPorts[0] < 0x30U) {
                         sgb.readJoypadID--;
-                        if (sgb.readJoypadID < 0x0c) sgb.readJoypadID = 0x0f;
+                        if (sgb.readJoypadID < 0x0cU) sgb.readJoypadID = 0x0fU;
                     }
                     ioPorts[0] = byte;
                 } else {
@@ -1399,9 +1370,9 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                 }
             } else {
                 ioPorts[0] = byte;
-                if (byte == 0x20) {
+                if (byte == 0x20U) {
                     ioPorts[0] |= keys.keyDir;
-                } else if (byte == 0x10) {
+                } else if (byte == 0x10U) {
                     ioPorts[0] |= keys.keyBut;
                 }
             }
@@ -1413,17 +1384,17 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
             }
             return;
         case 0x02: // Serial transfer control
-            if ((data & 0x80) != 0x00) {
+            if ((data & 0x80U) != 0x00U) {
                 byte = data;
-                ioPorts[2] = data & 0x83;
+                ioPorts[2] = data & 0x83U;
                 serialIsTransferring = true;
-                if ((data & 0x01) != 0) {
+                if ((data & 0x01U) != 0) {
                     // Attempt to send a byte
                     serialClockIsExternal = false;
                     serialTimer = 512 * 1;
-                    if (romProperties.cgbFlag == 0x00) {
-                        ioPorts[2] |= 0x02;
-                    } else if ((data & 0x02) != 0x00) {
+                    if (romProperties.cgbFlag == 0x00U) {
+                        ioPorts[2] |= 0x02U;
+                    } else if ((data & 0x02U) != 0x00U) {
                         serialTimer /= 32;
                     }
                 } else {
@@ -1432,21 +1403,17 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                     serialTimer = 1;
                 }
             } else {
-                ioPorts[2] = data & 0x83;
+                ioPorts[2] = data & 0x83U;
                 serialIsTransferring = false;
                 serialRequest = false;
             }
             return;
         case 0x04: // Divider register (writing resets to 0)
-            ioPorts[0x04] = 0x00;
+            ioPorts[0x04] = 0x00U;
             return;
         case 0x07: // Timer control
-            byte = data & 0x04;
-            if (byte != 0x00) {
-                cpuTimerRunning = true;
-            }
-            else cpuTimerRunning = false;
-            switch (data & 0x03) {
+            cpuTimerRunning = data & 0x04U;
+            switch (data & 0x03U) {
                 case 0:
                     cpuTimerIncTime = 1024;
                     break;
@@ -1460,14 +1427,14 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                     cpuTimerIncTime = 256;
                     break;
             }
-            ioPorts[0x07] = data & 0x07;
+            ioPorts[0x07] = data & 0x07U;
             return;
         case 0x40: // LCD ctrl
             if (data < 128) {
                 accessVram = true;
                 accessOam = true;
                 ioPorts[0x44] = 0;
-                if (ioPorts[0x40] >= 0x80) {
+                if (ioPorts[0x40] >= 0x80U) {
                     // Try to clear the screen. Be prepared to wait because frame rate is irrelevant when LCD is disabled.
                     if (!frameManager.frameIsInProgress()) {
                         uint32_t* frameBuffer = frameManager.beginNewFrame();
@@ -1479,7 +1446,7 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                         // If a frame was obtained, clear it to black and flag it for rendering
                         if (frameBuffer) {
                             for (ioIndex = 0; ioIndex < 160 * 144; ioIndex++) {
-                                frameBuffer[ioIndex] = 0x000000ff;
+                                frameBuffer[ioIndex] = 0x000000ffU;
                             }
                             frameManager.finishCurrentFrame();
                         }
@@ -1496,17 +1463,17 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
             ioPorts[0x40] = data;
             return;
         case 0x41: // LCD status
-            ioPorts[0x41] &= 0x07; // Bits 0-2 are read-only. Bit 7 doesn't exist.
-            ioPorts[0x41] |= (data & 0x78);
+            ioPorts[0x41] &= 0x07U; // Bits 0-2 are read-only. Bit 7 doesn't exist.
+            ioPorts[0x41] |= (data & 0x78U);
             return;
         case 0x44: // LCD Line No (read-only)
             return;
         case 0x46: // Launch OAM DMA transfer
             ioPorts[0x46] = data;
-            if (data < 0x80) {
+            if (data < 0x80U) {
                 return; // Cannot copy from ROM in this way
             }
-            word = ((unsigned int)data) << 8;
+            word = ((unsigned int)data) << 8U;
             for (count = 0; count < 160; count++) {
                 oam[count] = read8(word);
                 word++;
@@ -1529,26 +1496,26 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
                 // Only works for GBC
                 return;
             }
-            if ((data & 0x01) != 0x00) {
-                ioPorts[0x4d] |= 0x01;
+            if (data & 0x01U) {
+                ioPorts[0x4d] |= 0x01U;
             } else {
-                ioPorts[0x4d] &= 0x80;
+                ioPorts[0x4d] &= 0x80U;
             }
             return;
         case 0x4f: // VRAM bank
             if (romProperties.cgbFlag) {
-                ioPorts[0x4f] = data & 0x01; // 1-bit register
-                vramBankOffset = (unsigned int)(data & 0x01) * 0x2000;
+                ioPorts[0x4f] = data & 0x01U; // 1-bit register
+                vramBankOffset = (unsigned int)(data & 0x01U) * 0x2000U;
             }
             return;
         case 0x51: // HDMA1
             ioPorts[0x51] = data;
             return;
         case 0x52: // HDMA2
-            ioPorts[0x52] = data & 0xf0;
+            ioPorts[0x52] = data & 0xf0U;
             return;
         case 0x53: // HDMA3
-            ioPorts[0x53] = data & 0x1f;
+            ioPorts[0x53] = data & 0x1fU;
             return;
         case 0x54: // HDMA4
             ioPorts[0x54] = data;
@@ -1557,47 +1524,47 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
             if (!romProperties.cgbFlag) {
                 return;
             }
-            if ((data & 0x80) == 0x00) {
+            if ((data & 0x80U) == 0x00U) {
                 // General purpose DMA
                 if (ioPorts[0x55] != 0xff) {
                     // H-blank DMA already running
                     ioPorts[0x55] = data; // Can be used to halt H-blank DMA
                     return;
                 }
-                word = (ioPorts[0x51] << 8) + ioPorts[0x52]; // DMA source
-                if ((word & 0xe000) == 0x8000) {
+                word = (ioPorts[0x51] << 8U) + ioPorts[0x52]; // DMA source
+                if ((word & 0xe000U) == 0x8000U) {
                     // Don't do transfers within VRAM
                     return;
                 }
-                if (word >= 0xe000) {
+                if (word >= 0xe000U) {
                     // Don't take source data from these addresses either
                     return;
                 }
-                unsigned int word2 = (ioPorts[0x53] << 8) + ioPorts[0x54] + 0x8000; // DMA destination
-                unsigned int bytesToTransfer = data & 0x7f;
+                unsigned int word2 = (ioPorts[0x53] << 8U) + ioPorts[0x54] + 0x8000U; // DMA destination
+                unsigned int bytesToTransfer = data & 0x7fU;
                 bytesToTransfer++;
                 bytesToTransfer *= 16;
                 for (count = 0; count < bytesToTransfer; count++) {
                     write8(word2, read8(word));
                     word++;
                     word2++;
-                    word2 &= 0x9fff; // Keep it within VRAM
+                    word2 &= 0x9fffU; // Keep it within VRAM
                 }
                 //if (ClockFreq == GBC_FREQ) clocks_acc -= BytesToTransfer * 4;
                 //else clocks_acc -= BytesToTransfer * 2;
-                ioPorts[0x55] = 0xff;
+                ioPorts[0x55] = 0xffU;
             } else {
                 // H-blank DMA
                 ioPorts[0x55] = data;
             }
             return;
         case 0x56: // Infrared
-            ioPorts[0x56] = (data & 0xc1) | 0x02; // Setting bit 2 indicates 'no light received'
+            ioPorts[0x56] = (data & 0xc1U) | 0x02U; // Setting bit 2 indicates 'no light received'
             return;
         case 0x68: // CGB background palette index
-            ioPorts[0x68] = data & 0xbf; // There is no bit 6
-            cgbBgPalIndex = data & 0x3f;
-            if ((data & 0x80) != 0x00) {
+            ioPorts[0x68] = data & 0xbfU; // There is no bit 6
+            cgbBgPalIndex = data & 0x3fU;
+            if (data & 0x80U) {
                 cgbBgPalIncr = 1;
             } else {
                 cgbBgPalIncr = 0;
@@ -1605,18 +1572,18 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
             return;
         case 0x69: // CBG background palette data (using address set by 0xff68)
             cgbBgPalData[cgbBgPalIndex] = data;
-            cgbBgPalette[cgbBgPalIndex >> 1] = REMAP_555_8888((unsigned int)cgbBgPalData[cgbBgPalIndex & 0xfe], (unsigned int)cgbBgPalData[cgbBgPalIndex | 0x01]);
+            cgbBgPalette[cgbBgPalIndex >> 1U] = REMAP_555_8888((unsigned int)cgbBgPalData[cgbBgPalIndex & 0xfeU], (unsigned int)cgbBgPalData[cgbBgPalIndex | 0x01U]);
             if (cgbBgPalIncr) {
                 cgbBgPalIndex++;
-                cgbBgPalIndex &= 0x3f;
+                cgbBgPalIndex &= 0x3fU;
                 ioPorts[0x68]++;
-                ioPorts[0x68] &= 0xbf;
+                ioPorts[0x68] &= 0xbfU;
             }
             return;
         case 0x6a: // CGB sprite palette index
-            ioPorts[0x6a] = data & 0xbf; // There is no bit 6
-            cgbObjPalIndex = data & 0x3f;
-            if ((data & 0x80) != 0x00) {
+            ioPorts[0x6a] = data & 0xbfU; // There is no bit 6
+            cgbObjPalIndex = data & 0x3fU;
+            if (data & 0x80U) {
                 cgbObjPalIncr = 1;
             } else {
                 cgbObjPalIncr = 0;
@@ -1624,23 +1591,23 @@ void Gbc::writeIO(unsigned int ioIndex, unsigned char data) {
             return;
         case 0x6b: // CBG sprite palette data (using address set by 0xff6a)
             cgbObjPalData[cgbObjPalIndex] = data;
-            cgbObjPalette[cgbObjPalIndex >> 1] = REMAP_555_8888((unsigned int)cgbObjPalData[cgbObjPalIndex & 0xfe], (unsigned int)cgbObjPalData[cgbObjPalIndex | 0x01]);
+            cgbObjPalette[cgbObjPalIndex >> 1U] = REMAP_555_8888((unsigned int)cgbObjPalData[cgbObjPalIndex & 0xfeU], (unsigned int)cgbObjPalData[cgbObjPalIndex | 0x01U]);
             if (cgbObjPalIncr) {
                 cgbObjPalIndex++;
-                cgbObjPalIndex &= 0x3f;
+                cgbObjPalIndex &= 0x3fU;
                 ioPorts[0x6a]++;
-                ioPorts[0x6a] &= 0xbf;
+                ioPorts[0x6a] &= 0xbfU;
             }
             return;
         case 0x70: // WRAM bank
             if (!romProperties.cgbFlag) {
                 return;
             }
-            ioPorts[0x70] = data & 0x07;
-            if (ioPorts[0x70] == 0x00) {
+            ioPorts[0x70] = data & 0x07U;
+            if (ioPorts[0x70] == 0x00U) {
                 ioPorts[0x70]++;
             }
-            wramBankOffset = (unsigned int)ioPorts[0x70] * 0x2000;
+            wramBankOffset = (unsigned int)ioPorts[0x70] * 0x2000U;
             return;
         default:
             ioPorts[ioIndex] = data;
@@ -1670,43 +1637,43 @@ void Gbc::latchTimerData() {
 
 
 void Gbc::translatePaletteBg(unsigned int paletteData) {
-    translatedPaletteBg[0] = stockPaletteBg[paletteData & 0x03];
-    translatedPaletteBg[1] = stockPaletteBg[(paletteData & 0x0c) / 4];
-    translatedPaletteBg[2] = stockPaletteBg[(paletteData & 0x30) / 16];
-    translatedPaletteBg[3] = stockPaletteBg[(paletteData & 0xc0) / 64];
-    sgbPaletteTranslationBg[0] = paletteData & 0x03;
-    sgbPaletteTranslationBg[1] = (paletteData & 0x0c) / 4;
-    sgbPaletteTranslationBg[2] = (paletteData & 0x30) / 16;
-    sgbPaletteTranslationBg[3] = (paletteData & 0xc0) / 64;
+    translatedPaletteBg[0] = stockPaletteBg[paletteData & 0x03U];
+    translatedPaletteBg[1] = stockPaletteBg[(paletteData & 0x0cU) / 4];
+    translatedPaletteBg[2] = stockPaletteBg[(paletteData & 0x30U) / 16];
+    translatedPaletteBg[3] = stockPaletteBg[(paletteData & 0xc0U) / 64];
+    sgbPaletteTranslationBg[0] = paletteData & 0x03U;
+    sgbPaletteTranslationBg[1] = (paletteData & 0x0cU) / 4;
+    sgbPaletteTranslationBg[2] = (paletteData & 0x30U) / 16;
+    sgbPaletteTranslationBg[3] = (paletteData & 0xc0U) / 64;
 }
 
 void Gbc::translatePaletteObj1(unsigned int paletteData) {
-    translatedPaletteObj[1] = stockPaletteObj1[(paletteData & 0x0c) / 4];
-    translatedPaletteObj[2] = stockPaletteObj1[(paletteData & 0x30) / 16];
-    translatedPaletteObj[3] = stockPaletteObj1[(paletteData & 0xc0) / 64];
-    sgbPaletteTranslationObj[1] = (paletteData & 0x0c) / 4;
-    sgbPaletteTranslationObj[2] = (paletteData & 0x30) / 16;
-    sgbPaletteTranslationObj[3] = (paletteData & 0xc0) / 64;
+    translatedPaletteObj[1] = stockPaletteObj1[(paletteData & 0x0cU) / 4];
+    translatedPaletteObj[2] = stockPaletteObj1[(paletteData & 0x30U) / 16];
+    translatedPaletteObj[3] = stockPaletteObj1[(paletteData & 0xc0U) / 64];
+    sgbPaletteTranslationObj[1] = (paletteData & 0x0cU) / 4;
+    sgbPaletteTranslationObj[2] = (paletteData & 0x30U) / 16;
+    sgbPaletteTranslationObj[3] = (paletteData & 0xc0U) / 64;
 }
 
 void Gbc::translatePaletteObj2(unsigned int paletteData) {
-    translatedPaletteObj[5] = stockPaletteObj2[(paletteData & 0x0c) / 4];
-    translatedPaletteObj[6] = stockPaletteObj2[(paletteData & 0x30) / 16];
-    translatedPaletteObj[7] = stockPaletteObj2[(paletteData & 0xc0) / 64];
-    sgbPaletteTranslationObj[5] = (paletteData & 0x0c) / 4;
-    sgbPaletteTranslationObj[6] = (paletteData & 0x30) / 16;
-    sgbPaletteTranslationObj[7] = (paletteData & 0xc0) / 64;
+    translatedPaletteObj[5] = stockPaletteObj2[(paletteData & 0x0cU) / 4];
+    translatedPaletteObj[6] = stockPaletteObj2[(paletteData & 0x30U) / 16];
+    translatedPaletteObj[7] = stockPaletteObj2[(paletteData & 0xc0U) / 64];
+    sgbPaletteTranslationObj[5] = (paletteData & 0x0cU) / 4;
+    sgbPaletteTranslationObj[6] = (paletteData & 0x30U) / 16;
+    sgbPaletteTranslationObj[7] = (paletteData & 0xc0U) / 64;
 }
 
 void Gbc::readLineGb(uint32_t* frameBuffer) {
     // Get relevant parameters from status registers and such:
-    const unsigned char lcdCtrl = ioPorts[0x40];
-    unsigned char scrY = ioPorts[0x42];
-    unsigned char scrX = ioPorts[0x43];
+    const uint8_t lcdCtrl = ioPorts[0x40];
+    uint8_t scrY = ioPorts[0x42];
+    uint8_t scrX = ioPorts[0x43];
     const unsigned int lineNo = ioPorts[0x44];
-    unsigned int tileSetIndexOffset = lcdCtrl & 0x10 ? 0x0000 : 0x0080;
-    unsigned int tileSetIndexInverter = lcdCtrl & 0x10 ? 0x0000 : 0x0080;
-    unsigned int tileMapBase = lcdCtrl & 0x08 ? 0x1c00 : 0x1800;
+    unsigned int tileSetIndexOffset = lcdCtrl & 0x10U ? 0x0000 : 0x0080;
+    unsigned int tileSetIndexInverter = lcdCtrl & 0x10U ? 0x0000 : 0x0080;
+    unsigned int tileMapBase = lcdCtrl & 0x08U ? 0x1c00 : 0x1800;
 
     // More variables
     unsigned int offset, max;
@@ -1719,16 +1686,16 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     unsigned int getPix;
 
     // Check if LCD is disabled or all elements (BG, window, sprites) are disabled (write a black row if that's the case):
-    if ((lcdCtrl & 0x80) == 0x00 || (lcdCtrl & 0x23) == 0x00) {
+    if ((lcdCtrl & 0x80U) == 0x00U || (lcdCtrl & 0x23U) == 0x00U) {
         dstPointer = &frameBuffer[lineNo * 160];
         for (pixX = 0; pixX < 160; pixX++) {
-            *dstPointer++ = 0x000000ff;
+            *dstPointer++ = 0x000000ffU;
         }
         return;
     }
 
     // Draw background if enabled
-    if (lcdCtrl & 0x01) {
+    if (lcdCtrl & 0x01U) {
         // Set point to draw to
         dstPointer = &frameBuffer[160 * lineNo];
 
@@ -1772,8 +1739,8 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     // Draw window if enabled and on-screen
     scrX = ioPorts[0x4b];
     scrY = ioPorts[0x4a];
-    tileMapBase = lcdCtrl & 0x40 ? 0x1c00 : 0x1800;
-    if (((lcdCtrl & 0x20) != 0x00) && (scrX < 167) && (scrY <= lineNo)) {
+    tileMapBase = lcdCtrl & 0x40U ? 0x1c00U : 0x1800U;
+    if (((lcdCtrl & 0x20U) != 0x00U) && (scrX < 167) && (scrY <= lineNo)) {
         // Subtract 7 from window X pos
         if (scrX > 6) {
             scrX -= 7;
@@ -1823,8 +1790,8 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     }
 
     // Draw sprites if enabled
-    if (lcdCtrl & 0x02) {
-        const unsigned char largeSprites = lcdCtrl & 0x04;
+    if (lcdCtrl & 0x02U) {
+        const uint8_t largeSprites = lcdCtrl & 0x04U;
 
         // Draw each sprite that is visible
         for (offset = 156; offset < 160; offset -= 4) {
@@ -1854,9 +1821,9 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             // Check sprite size, and accordingly re-assess visibility and adjust tilemap index
             if (largeSprites) {
                 if (lineNo + 8 >= scrY) {
-                    tileNo |= 0x01;
+                    tileNo |= 0x01U;
                 } else {
-                    tileNo &= 0xfe;
+                    tileNo &= 0xfeU;
                 }
             } else if (lineNo + 8 >= scrY) {
                 continue;
@@ -1866,7 +1833,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             pixY = (lineNo + 16 - scrY) % 8;
 
             // Set which palette to draw with
-            paletteOffset = spriteFlags & 0x10 ? 4 : 0;
+            paletteOffset = spriteFlags & 0x10U ? 4 : 0;
             uint32_t colourZero = translatedPaletteBg[0];
 
             // Get first pixel in tile row to draw, plus how many pixels to draw, and adjust the starting point to write to in the image
@@ -1886,7 +1853,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
             // Adjust X if horizontally flipping
             int tileSetPointerDirection;
-            if (spriteFlags & 0x20) {
+            if (spriteFlags & 0x20U) {
                 pixX = 7 - pixX;
                 tileSetPointerDirection = -1;
             } else {
@@ -1894,12 +1861,12 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             }
 
             // Adjust Y if vertically flipping
-            if (spriteFlags & 0x40) {
+            if (spriteFlags & 0x40U) {
                 pixY = 7 - pixY;
             }
 
             // Get priority flag
-            unsigned int BackgroundPriority = spriteFlags & 0x80;
+            unsigned int BackgroundPriority = spriteFlags & 0x80U;
 
             // Set point to draw to
             dstPointer = &frameBuffer[160 * lineNo + scrX];
@@ -1930,13 +1897,13 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
 void Gbc::readLineSgb(uint32_t * frameBuffer) {
     // Get relevant parameters from status registers and such:
-    const unsigned char lcdCtrl = ioPorts[0x40];
-    unsigned char scrY = ioPorts[0x42];
-    unsigned char scrX = ioPorts[0x43];
+    const uint8_t lcdCtrl = ioPorts[0x40];
+    uint8_t scrY = ioPorts[0x42];
+    uint8_t scrX = ioPorts[0x43];
     const unsigned int lineNo = ioPorts[0x44];
-    unsigned int tileSetIndexOffset = lcdCtrl & 0x10 ? 0x0000 : 0x0080;
-    unsigned int tileSetIndexInverter = lcdCtrl & 0x10 ? 0x0000 : 0x0080;
-    unsigned int tileMapBase = lcdCtrl & 0x08 ? 0x1c00 : 0x1800;
+    unsigned int tileSetIndexOffset = lcdCtrl & 0x10U ? 0x0000U : 0x0080U;
+    unsigned int tileSetIndexInverter = lcdCtrl & 0x10U ? 0x0000U : 0x0080U;
+    unsigned int tileMapBase = lcdCtrl & 0x08U ? 0x1c00U : 0x1800U;
 
     // More variables
     unsigned int offset, max;
@@ -1949,7 +1916,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
     unsigned int getPix;
 
     // Draw background if enabled
-    if (lcdCtrl & 0x01) {
+    if (lcdCtrl & 0x01U) {
         // Set point to draw to
         dstPointer = &sgb.monoData[160 * lineNo];
 
@@ -1993,8 +1960,8 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
     // Draw window if enabled and on-screen
     scrX = ioPorts[0x4b];
     scrY = ioPorts[0x4a];
-    tileMapBase = lcdCtrl & 0x40 ? 0x1c00 : 0x1800;
-    if (((lcdCtrl & 0x20) != 0x00) && (scrX < 167) && (scrY <= lineNo)) {
+    tileMapBase = lcdCtrl & 0x40U ? 0x1c00U : 0x1800U;
+    if (((lcdCtrl & 0x20U) != 0x00U) && (scrX < 167) && (scrY <= lineNo)) {
         // Subtract 7 from window X pos
         if (scrX > 6) {
             scrX -= 7;
@@ -2045,8 +2012,8 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
     }
 
     // Draw sprites if enabled
-    if (lcdCtrl & 0x02) {
-        const unsigned char largeSprites = lcdCtrl & 0x04;
+    if (lcdCtrl & 0x02U) {
+        const uint8_t largeSprites = lcdCtrl & 0x04U;
 
         // Draw each sprite that is visible
         for (offset = 156; offset < 160; offset -= 4) {
@@ -2076,9 +2043,9 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
             // Check sprite size, and accordingly re-assess visibility and adjust tilemap index
             if (largeSprites) {
                 if (lineNo + 8 >= scrY) {
-                    tileNo |= 0x01;
+                    tileNo |= 0x01U;
                 } else {
-                    tileNo &= 0xfe;
+                    tileNo &= 0xfeU;
                 }
             } else if (lineNo + 8 >= scrY) {
                 continue;
@@ -2088,7 +2055,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
             pixY = (lineNo + 16 - scrY) % 8;
 
             // Set which palette to draw with
-            paletteOffset = spriteFlags & 0x10 ? 4 : 0;
+            paletteOffset = spriteFlags & 0x10U ? 4 : 0;
             uint32_t colourZero = translatedPaletteBg[0];
 
             // Get first pixel in tile row to draw, plus how many pixels to draw, and adjust the starting point to write to in the image
@@ -2108,7 +2075,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
 
             // Adjust X if horizontally flipping
             int tileSetPointerDirection;
-            if (spriteFlags & 0x20) {
+            if (spriteFlags & 0x20U) {
                 pixX = 7 - pixX;
                 tileSetPointerDirection = -1;
             } else {
@@ -2116,12 +2083,12 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
             }
 
             // Adjust Y if vertically flipping
-            if (spriteFlags & 0x40) {
+            if (spriteFlags & 0x40U) {
                 pixY = 7 - pixY;
             }
 
             // Get priority flag
-            unsigned int BackgroundPriority = spriteFlags & 0x80;
+            unsigned int BackgroundPriority = spriteFlags & 0x80U;
 
             // Set point to draw to
             dstPointer = &sgb.monoData[160 * lineNo + scrX];
@@ -2152,13 +2119,13 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
 
 void Gbc::readLineCgb(uint32_t * frameBuffer) {
     // Get relevant parameters from status registers and such:
-    const unsigned char lcdCtrl = ioPorts[0x40];
-    unsigned char scrY = ioPorts[0x42];
-    unsigned char scrX = ioPorts[0x43];
+    const uint8_t lcdCtrl = ioPorts[0x40];
+    uint8_t scrY = ioPorts[0x42];
+    uint8_t scrX = ioPorts[0x43];
     const unsigned int lineNo = ioPorts[0x44];
-    unsigned int tileSetIndexOffset = lcdCtrl & 0x10 ? 0x0000 : 0x0080;
-    unsigned int tileSetIndexInverter = lcdCtrl & 0x10 ? 0x0000 : 0x0080;
-    unsigned int tileMapBase = lcdCtrl & 0x08 ? 0x1c00 : 0x1800;
+    unsigned int tileSetIndexOffset = lcdCtrl & 0x10U ? 0x0000U : 0x0080U;
+    unsigned int tileSetIndexInverter = lcdCtrl & 0x10U ? 0x0000U : 0x0080U;
+    unsigned int tileMapBase = lcdCtrl & 0x08U ? 0x1c00U : 0x1800U;
 
     // More variables
     unsigned int offset, max;
@@ -2171,16 +2138,16 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
     unsigned int getPix;
 
     // Check if LCD is disabled or all elements (BG, window, sprites) are disabled (write a black row if that's the case):
-    if ((lcdCtrl & 0x80) == 0x00 || (lcdCtrl & 0x23) == 0x00) {
+    if ((lcdCtrl & 0x80U) == 0x00U || (lcdCtrl & 0x23U) == 0x00U) {
         dstPointer = &frameBuffer[lineNo * 160];
         for (pixX = 0; pixX < 160; pixX++) {
-            *dstPointer++ = 0x000000ff;
+            *dstPointer++ = 0x000000ffU;
         }
         return;
     }
 
     // Draw background if enabled
-    if (lcdCtrl & 0x01) {
+    if (lcdCtrl & 0x01U) {
         // Set point to draw to
         dstPointer = &frameBuffer[160 * lineNo];
 
@@ -2195,26 +2162,26 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             // Get tile no. and point to the tileset data to read
             unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
             unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
-            unsigned int tileParams = vram[0x2000 + tileMapIndex];
-            unsigned int adjustedY = tileParams & 0x0040 ? 7 - pixY : pixY;
-            if (tileParams & 0x0008) {
+            unsigned int tileParams = vram[0x2000U + tileMapIndex];
+            unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
+            if (tileParams & 0x0008U) {
                 // Using bank 1
-                tileNo += 0x0180;
+                tileNo += 0x0180U;
             }
 
             // Draw up to 8 pixels of this tile
-            if (tileParams & 0x0020) {
+            if (tileParams & 0x0020U) {
                 // Flipped horizontally
                 unsigned int drawnX = 7 - pixX;
                 tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07) + *tileSetPointer--];
+                    *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer--];
                     pixX++;
                 }
             } else {
                 tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07) + *tileSetPointer++];
+                    *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer++];
                     pixX++;
                 }
             }
@@ -2230,26 +2197,26 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         // Get tile no
         unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
         unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
-        unsigned int tileParams = vram[0x2000 + tileMapIndex];
-        unsigned int adjustedY = tileParams & 0x0040 ? 7 - pixY : pixY;
-        if (tileParams & 0x0008) {
+        unsigned int tileParams = vram[0x2000U + tileMapIndex];
+        unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
+        if (tileParams & 0x0008U) {
             // Using bank 1
-            tileNo += 0x0180;
+            tileNo += 0x0180U;
         }
         tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
 
         // Draw up to 8 pixels of this tile
-        if (tileParams & 0x0020) {
+        if (tileParams & 0x0020U) {
             // Flipped horizontally
             unsigned int drawnX = 7 - pixX;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
             while (pixX < max) {
-                *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07) + *tileSetPointer--];
+                *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer--];
                 pixX++;
             }
         } else {
             while (pixX < max) {
-                *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07) + *tileSetPointer++];
+                *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer++];
                 pixX++;
             }
         }
@@ -2258,8 +2225,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
     // Draw window if enabled and on-screen
     scrX = ioPorts[0x4b];
     scrY = ioPorts[0x4a];
-    tileMapBase = lcdCtrl & 0x40 ? 0x1c00 : 0x1800;
-    if (((lcdCtrl & 0x20) != 0x00) && (scrX < 167) && (scrY <= lineNo)) {
+    tileMapBase = lcdCtrl & 0x40U ? 0x1c00U : 0x1800U;
+    if (((lcdCtrl & 0x20U) != 0x00U) && (scrX < 167) && (scrY <= lineNo)) {
         // Subtract 7 from window X pos
         if (scrX > 6) {
             scrX -= 7;
@@ -2282,26 +2249,26 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             // Get tile no
             unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
             unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
-            unsigned int tileParams = vram[0x2000 + tileMapIndex];
-            unsigned int adjustedY = tileParams & 0x0040 ? 7 - pixY : pixY;
-            if (tileParams & 0x0008) {
+            unsigned int tileParams = vram[0x2000U + tileMapIndex];
+            unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
+            if (tileParams & 0x0008U) {
                 // Using bank 1
-                tileNo += 0x0180;
+                tileNo += 0x0180U;
             }
             tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
 
             // Draw the 8 pixels of this tile
-            if (tileParams & 0x0020) {
+            if (tileParams & 0x0020U) {
                 // Flipped horizontally
                 unsigned int drawnX = 7 - pixX;
                 tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[(tileParams & 0x07) + *tileSetPointer--];
+                    *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer--];
                     pixX++;
                 }
             } else {
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[(tileParams & 0x07) + *tileSetPointer++];
+                    *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer++];
                     pixX++;
                 }
             }
@@ -2317,34 +2284,34 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         // Get tile no
         unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
         unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
-        unsigned int tileParams = vram[0x2000 + tileMapIndex];
-        unsigned int adjustedY = tileParams & 0x0040 ? 7 - pixY : pixY;
-        if (tileParams & 0x0008) {
+        unsigned int tileParams = vram[0x2000U + tileMapIndex];
+        unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
+        if (tileParams & 0x0008U) {
             // Using bank 1
-            tileNo += 0x0180;
+            tileNo += 0x0180U;
         }
         tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
 
         // Draw up to 8 pixels of this tile
-        if (tileParams & 0x0020) {
+        if (tileParams & 0x0020U) {
             // Flipped horizontally
             unsigned int drawnX = 7 - pixX;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
             while (pixX < offset) {
-                *dstPointer++ = cgbBgPalette[(tileParams & 0x07) + *tileSetPointer--];
+                *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer--];
                 pixX++;
             }
         } else {
             while (pixX < offset) {
-                *dstPointer++ = cgbBgPalette[(tileParams & 0x07) + *tileSetPointer++];
+                *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer++];
                 pixX++;
             }
         }
     }
 
     // Draw sprites if enabled
-    if (lcdCtrl & 0x02) {
-        const unsigned char largeSprites = lcdCtrl & 0x04;
+    if (lcdCtrl & 0x02U) {
+        const uint8_t largeSprites = lcdCtrl & 0x04U;
 
         // Draw each sprite that is visible
         for (offset = 156; offset < 160; offset -= 4) {
@@ -2374,14 +2341,14 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             // Check sprite size, and accordingly re-assess visibility and adjust tilemap index
             if (largeSprites) {
                 if (lineNo + 8 >= scrY) {
-                    tileNo |= 0x01;
+                    tileNo |= 0x01U;
                 } else {
-                    tileNo &= 0xfe;
+                    tileNo &= 0xfeU;
                 }
             } else if (lineNo + 8 >= scrY) {
                 continue;
             }
-            if (spriteFlags & 0x08) {
+            if (spriteFlags & 0x08U) {
                 tileNo += 192;
             }
 
@@ -2389,7 +2356,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             pixY = (lineNo + 16 - scrY) % 8;
 
             // Set which palette to draw with
-            paletteOffset = (spriteFlags & 0x07) << 2;
+            paletteOffset = (spriteFlags & 0x07U) << 2U;
 
             // Get first pixel in tile row to draw, plus how many pixels to draw, and adjust the starting point to write to in the image
             if (scrX < 8) {
@@ -2408,7 +2375,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
 
             // Adjust X if horizontally flipping
             int tileSetPointerDirection;
-            if (spriteFlags & 0x20) {
+            if (spriteFlags & 0x20U) {
                 pixX = 7 - pixX;
                 tileSetPointerDirection = -1;
             } else {
@@ -2416,12 +2383,12 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             }
 
             // Adjust Y if vertically flipping
-            if (spriteFlags & 0x40) {
+            if (spriteFlags & 0x40U) {
                 pixY = 7 - pixY;
             }
 
             // Get priority flag
-            //unsigned int BackgroundPriority = spriteFlags & 0x80;
+            //unsigned int BackgroundPriority = spriteFlags & 0x80U;
 
             // Set point to draw to
             dstPointer = &frameBuffer[160 * lineNo + scrX];
@@ -2458,57 +2425,50 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
 
 
 inline unsigned int Gbc::HL() {
-    return ((unsigned int)cpuH << 8) + (unsigned int)cpuL;
+    return ((unsigned int)cpuH << 8U) + (unsigned int)cpuL;
 }
 
-inline unsigned char Gbc::R8_HL() {
-    return read8(((unsigned int)cpuH << 8) + (unsigned int)cpuL);
+inline uint8_t Gbc::R8_HL() {
+    return read8(((unsigned int)cpuH << 8U) + (unsigned int)cpuL);
 }
 
-inline void Gbc::W8_HL(unsigned char byte) {
-    write8(((unsigned int)cpuH << 8) + (unsigned int)cpuL, byte);
+inline void Gbc::W8_HL(uint8_t byte) {
+    write8(((unsigned int)cpuH << 8U) + (unsigned int)cpuL, byte);
 }
 
-inline void Gbc::SETZ_ON_ZERO(unsigned char testValue) {
-    if (testValue == 0x00)
-    {
-        cpuF |= 0x80;
+inline void Gbc::SETZ_ON_ZERO(uint8_t testValue) {
+    if (testValue == 0x00U) {
+        cpuF |= 0x80U;
     }
 }
 
 inline void Gbc::SETZ_ON_COND(bool test) {
-    if (test)
-    {
-        cpuF |= 0x80;
+    if (test) {
+        cpuF |= 0x80U;
     }
 }
 
-inline void Gbc::SETH_ON_ZERO(unsigned char testValue) {
-    if (testValue == 0x00)
-    {
-        cpuF |= 0x20;
+inline void Gbc::SETH_ON_ZERO(uint8_t testValue) {
+    if (testValue == 0x00U) {
+        cpuF |= 0x20U;
     }
 }
 
 inline void Gbc::SETH_ON_COND(bool test) {
-    if (test)
-    {
-        cpuF |= 0x20;
+    if (test) {
+        cpuF |= 0x20U;
     }
 }
 
 inline void Gbc::SETC_ON_COND(bool test) {
-    if (test)
-    {
-        cpuF |= 0x10;
+    if (test) {
+        cpuF |= 0x10U;
     }
 }
 
-unsigned int Gbc::performOp()
-{
-    unsigned char instr = read8(cpuPc);
-    switch (instr)
-    {
+int Gbc::performOp() {
+    uint8_t instr = read8(cpuPc);
+    switch (instr) {
         case 0x00: // nop
             cpuPc++;
             return 4;
@@ -2518,29 +2478,28 @@ unsigned int Gbc::performOp()
             cpuPc += 3;
             return 12;
         case 0x02: // ld (BC), A
-            write8(((unsigned int)cpuB << 8) + (unsigned int)cpuC, cpuA);
+            write8(((unsigned int)cpuB << 8U) + (unsigned int)cpuC, cpuA);
             cpuPc++;
             return 8;
         case 0x03: // inc BC
             cpuC++;
-            if (cpuC == 0x00)
-            {
+            if (cpuC == 0x00) {
                 cpuB++;
             }
             cpuPc++;
             return 8;
         case 0x04: // inc B
-            cpuF &= 0x10;
-            cpuB += 0x01;
+            cpuF &= 0x10U;
+            cpuB += 0x01U;
             SETZ_ON_ZERO(cpuB);
-            SETH_ON_ZERO(cpuB & 0x0f);
+            SETH_ON_ZERO(cpuB & 0x0fU);
             cpuPc++;
             return 4;
         case 0x05: // dec B
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuB & 0x0f);
-            cpuB -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuB & 0x0fU);
+            cpuB -= 0x01U;
             SETZ_ON_ZERO(cpuB);
             cpuPc++;
             return 4;
@@ -2550,40 +2509,40 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x07: // rlc A (rotate bit 7 to bit 0, and copy bit 7 to carry flag)
         {
-            unsigned char tempByte = cpuA & 0x80; // True if bit 7 is set
+            uint8_t tempByte = cpuA & 0x80U; // True if bit 7 is set
             cpuF = 0x00;
-            cpuA = cpuA << 1;
+            cpuA = cpuA << 1U;
             if (tempByte != 0)
             {
-                cpuF |= 0x10; // Set carry
-                cpuA |= 0x01;
+                cpuF |= 0x10U; // Set carry
+                cpuA |= 0x01U;
             }
         }
             cpuPc++;
             return 4;
         case 0x08: // ld (nn), SP
-            write16(((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1),
-                    (unsigned char)(cpuSp & 0x00ff),
-                    (unsigned char)((cpuSp >> 8) & 0x00ff)
+            write16(((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1),
+                    (uint8_t)(cpuSp & 0x00ffU),
+                    (uint8_t)((cpuSp >> 8U) & 0x00ffU)
             );
             cpuPc += 3;
             return 20;
         case 0x09: // add HL, BC
-            cpuF &= 0x80;
+            cpuF &= 0x80U;
             cpuL += cpuC;
             if (cpuL < cpuC)
             {
                 cpuH++;
                 SETC_ON_COND(cpuH == 0x00);
-                SETH_ON_ZERO(cpuH & 0x0f);
+                SETH_ON_ZERO(cpuH & 0x0fU);
             }
             cpuH += cpuB;
             SETC_ON_COND(cpuH < cpuB);
-            SETH_ON_COND((cpuH & 0x0f) < (cpuB & 0x0f));
+            SETH_ON_COND((cpuH & 0x0fU) < (cpuB & 0x0fU));
             cpuPc++;
             return 8;
         case 0x0a: // ld A, (BC)
-            cpuA = read8(((unsigned int)cpuB << 8) + (unsigned int)cpuC);
+            cpuA = read8(((unsigned int)cpuB << 8U) + (unsigned int)cpuC);
             cpuPc++;
             return 8;
         case 0x0b: // dec BC
@@ -2595,17 +2554,17 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 8;
         case 0x0c: // inc C
-            cpuF &= 0x10;
-            cpuC += 0x01;
+            cpuF &= 0x10U;
+            cpuC += 0x01U;
             SETZ_ON_ZERO(cpuC);
-            SETH_ON_ZERO(cpuC & 0x0f);
+            SETH_ON_ZERO(cpuC & 0x0fU);
             cpuPc++;
             return 4;
         case 0x0d: // dec C
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuC & 0x0f);
-            cpuC -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuC & 0x0fU);
+            cpuC -= 0x01U;
             SETZ_ON_ZERO(cpuC);
             cpuPc++;
             return 4;
@@ -2615,30 +2574,25 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x0f: // rrc A (8-bit rotation right - bit 0 is moved to carry also)
         {
-            unsigned char tempByte = cpuA & 0x01;
+            uint8_t tempByte = cpuA & 0x01U;
             cpuF = 0x00;
-            cpuA = cpuA >> 1;
-            cpuA = cpuA & 0x7f; // Clear msb in case sign bit preserved by compiler
-            if (tempByte != 0)
-            {
-                cpuF = 0x10;
-                cpuA |= 0x80;
+            cpuA = cpuA >> 1U;
+            cpuA = cpuA & 0x7fU; // Clear msb in case sign bit preserved by compiler
+            if (tempByte != 0) {
+                cpuF = 0x10U;
+                cpuA |= 0x80U;
             }
         }
             cpuPc++;
             return 4;
         case 0x10: // stop
-            if ((ioPorts[0x4d] & 0x01) != 0)
-            {
-                ioPorts[0x4d] &= 0x80;
-                if (ioPorts[0x4d] == 0x00) // Switch CPU running speed
-                {
-                    ioPorts[0x4d] = 0x80;
+            if ((ioPorts[0x4d] & 0x01U) != 0) {
+                ioPorts[0x4d] &= 0x80U;
+                if (ioPorts[0x4d] == 0x00) { // Switch CPU running speed
+                    ioPorts[0x4d] = 0x80U;
                     cpuClockFreq = GBC_FREQ;
                     gpuClockFactor = 2;
-                }
-                else
-                {
+                } else {
                     ioPorts[0x4d] = 0x00;
                     cpuClockFreq = GB_FREQ;
                     gpuClockFactor = 1;
@@ -2652,29 +2606,28 @@ unsigned int Gbc::performOp()
             cpuPc += 3;
             return 12;
         case 0x12: // ld (DE), A
-            write8(((unsigned int)cpuD << 8) + (unsigned int)cpuE, cpuA);
+            write8(((unsigned int)cpuD << 8U) + (unsigned int)cpuE, cpuA);
             cpuPc++;
             return 8;
         case 0x13: // inc DE
             cpuE++;
-            if (cpuE == 0x00)
-            {
+            if (cpuE == 0x00) {
                 cpuD++;
             }
             cpuPc++;
             return 8;
         case 0x14: // inc D
-            cpuF &= 0x10;
-            cpuD += 0x01;
+            cpuF &= 0x10U;
+            cpuD += 0x01U;
             SETZ_ON_ZERO(cpuD);
-            SETH_ON_ZERO(cpuD & 0x0f);
+            SETH_ON_ZERO(cpuD & 0x0fU);
             cpuPc++;
             return 4;
         case 0x15: // dec D
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuD & 0x0f);
-            cpuD -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuD & 0x0fU);
+            cpuD -= 0x01U;
             SETZ_ON_ZERO(cpuD);
             cpuPc++;
             return 4;
@@ -2684,20 +2637,20 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x17: // rl A (rotate carry bit to bit 0 of A)
         {
-            unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+            uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
             cpuF = 0x00;
-            SETC_ON_COND((cpuA & 0x80) != 0); // Copy bit 7 to carry bit
-            cpuA = cpuA << 1;
+            SETC_ON_COND((cpuA & 0x80U) != 0); // Copy bit 7 to carry bit
+            cpuA = cpuA << 1U;
             if (tempByte != 0)
             {
-                cpuA |= 0x01; // Copy carry flag to bit 0
+                cpuA |= 0x01U; // Copy carry flag to bit 0
             }
         }
             cpuPc++;
             return 4;
         case 0x18: // jr d
         {
-            unsigned char msb = read8(cpuPc + 1);
+            uint8_t msb = read8(cpuPc + 1);
             if (msb >= 0x80)
             {
                 cpuPc -= 256 - (unsigned int)msb;
@@ -2710,21 +2663,21 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 12;
         case 0x19: // add HL, DE
-            cpuF &= 0x80;
+            cpuF &= 0x80U;
             cpuL += cpuE;
             if (cpuL < cpuE)
             {
                 cpuH++;
                 SETC_ON_COND(cpuH == 0x00);
-                SETH_ON_ZERO(cpuH & 0x0f);
+                SETH_ON_ZERO(cpuH & 0x0fU);
             }
             cpuH += cpuD;
             SETC_ON_COND(cpuH < cpuD);
-            SETH_ON_COND((cpuH & 0x0f) < (cpuD & 0x0f));
+            SETH_ON_COND((cpuH & 0x0fU) < (cpuD & 0x0fU));
             cpuPc++;
             return 8;
         case 0x1a: // ld A, (DE)
-            cpuA = read8(((unsigned int)cpuD << 8) + (unsigned int)cpuE);
+            cpuA = read8(((unsigned int)cpuD << 8U) + (unsigned int)cpuE);
             cpuPc++;
             return 8;
         case 0x1b: // dec DE
@@ -2736,17 +2689,17 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 8;
         case 0x1c: // inc E
-            cpuF &= 0x10;
-            cpuE += 0x01;
+            cpuF &= 0x10U;
+            cpuE += 0x01U;
             SETZ_ON_ZERO(cpuE);
-            SETH_ON_ZERO(cpuE & 0x0f);
+            SETH_ON_ZERO(cpuE & 0x0fU);
             cpuPc++;
             return 4;
         case 0x1d: // dec E
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuE & 0x0f);
-            cpuE -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuE & 0x0fU);
+            cpuE -= 0x01U;
             SETZ_ON_ZERO(cpuE);
             cpuPc++;
             return 4;
@@ -2756,27 +2709,27 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x1f: // rr A (9-bit rotation right of A through carry)
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x00;
-            SETC_ON_COND(cpuA & 0x01);
-            cpuA = cpuA >> 1;
-            cpuA = cpuA & 0x7f;
+            SETC_ON_COND(cpuA & 0x01U);
+            cpuA = cpuA >> 1U;
+            cpuA = cpuA & 0x7fU;
             if (tempByte != 0x00)
             {
-                cpuA |= 0x80;
+                cpuA |= 0x80U;
             }
         }
             cpuPc++;
             return 4;
         case 0x20: // jr NZ, d
-            if ((cpuF & 0x80) != 0)
+            if ((cpuF & 0x80U) != 0)
             {
                 cpuPc += 2;
                 return 8;
             }
             else
             {
-                unsigned char msb = read8(cpuPc + 1);
+                uint8_t msb = read8(cpuPc + 1);
                 if (msb >= 0x80)
                 {
                     cpuPc -= 256 - (unsigned int)msb;
@@ -2811,17 +2764,17 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 8;
         case 0x24: // inc H
-            cpuF &= 0x10;
-            cpuH += 0x01;
+            cpuF &= 0x10U;
+            cpuH += 0x01U;
             SETZ_ON_ZERO(cpuH);
-            SETH_ON_ZERO(cpuH & 0x0f);
+            SETH_ON_ZERO(cpuH & 0x0fU);
             cpuPc++;
             return 4;
         case 0x25: // dec H
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuH & 0x0f);
-            cpuH -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuH & 0x0fU);
+            cpuH -= 0x01U;
             SETZ_ON_ZERO(cpuH);
             cpuPc++;
             return 4;
@@ -2830,41 +2783,41 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 8;
         case 0x27: // daa (Decimal Adjust Accumulator - do BCD correction)
-            if ((cpuF & 0x40) == 0x00)
+            if ((cpuF & 0x40U) == 0x00)
             {
-                if (((cpuA & 0x0f) > 0x09) || ((cpuF & 0x20) != 0x00)) // If lower 4 bits are non-decimal or H is set, add 0x06
+                if (((cpuA & 0x0fU) > 0x09) || ((cpuF & 0x20U) != 0x00)) // If lower 4 bits are non-decimal or H is set, add 0x06
                 {
                     cpuA += 0x06;
                 }
-                unsigned char tempByte = cpuF & 0x10;
-                cpuF &= 0x40; // Reset C, H and Z flags
+                uint8_t tempByte = cpuF & 0x10U;
+                cpuF &= 0x40U; // Reset C, H and Z flags
                 if ((cpuA > 0x9f) || (tempByte != 0x00)) // If upper 4 bits are non-decimal or C was set, add 0x60
                 {
                     cpuA += 0x60;
-                    cpuF |= 0x10; // Sets the C flag if this second addition was needed
+                    cpuF |= 0x10U; // Sets the C flag if this second addition was needed
                 }
             }
             else
             {
-                if (((cpuA & 0x0f) > 0x09) || ((cpuF & 0x20) != 0x00)) // If lower 4 bits are non-decimal or H is set, add 0x06
+                if (((cpuA & 0x0fU) > 0x09) || ((cpuF & 0x20U) != 0x00)) // If lower 4 bits are non-decimal or H is set, add 0x06
                 {
                     cpuA -= 0x06;
                 }
-                unsigned char tempByte = cpuF & 0x10;
-                cpuF &= 0x40; // Reset C, H and Z flags
+                uint8_t tempByte = cpuF & 0x10U;
+                cpuF &= 0x40U; // Reset C, H and Z flags
                 if ((cpuA > 0x9f) || (tempByte != 0x00)) // If upper 4 bits are non-decimal or C was set, add 0x60
                 {
                     cpuA -= 0x60;
-                    cpuF |= 0x10; // Sets the C flag if this second addition was needed
+                    cpuF |= 0x10U; // Sets the C flag if this second addition was needed
                 }
             }
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0x28: // jr Z, d
-            if ((cpuF & 0x80) != 0x00)
+            if ((cpuF & 0x80U) != 0x00)
             {
-                unsigned char msb = read8(cpuPc + 1);
+                uint8_t msb = read8(cpuPc + 1);
                 if (msb >= 0x80)
                 {
                     cpuPc -= 256 - (unsigned int)msb;
@@ -2882,10 +2835,10 @@ unsigned int Gbc::performOp()
                 return 8;
             }
         case 0x29: // add HL, HL
-            cpuF &= 0x80;
-            SETC_ON_COND((cpuH & 0x80) != 0x00);
-            SETH_ON_COND((cpuH & 0x08) != 0x00);
-            if ((cpuL & 0x80) != 0x00)
+            cpuF &= 0x80U;
+            SETC_ON_COND((cpuH & 0x80U) != 0x00);
+            SETH_ON_COND((cpuH & 0x08U) != 0x00);
+            if ((cpuL & 0x80U) != 0x00)
             {
                 cpuH += cpuH + 1;
                 cpuL += cpuL;
@@ -2915,17 +2868,17 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 8;
         case 0x2c: // inc L
-            cpuF &= 0x10;
-            cpuL += 0x01;
+            cpuF &= 0x10U;
+            cpuL += 0x01U;
             SETZ_ON_ZERO(cpuL);
-            SETH_ON_ZERO(cpuL & 0x0f);
+            SETH_ON_ZERO(cpuL & 0x0fU);
             cpuPc++;
             return 4;
         case 0x2d: // dec L
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuL & 0x0f);
-            cpuL -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuL & 0x0fU);
+            cpuL -= 0x01U;
             SETZ_ON_ZERO(cpuL);
             cpuPc++;
             return 4;
@@ -2935,18 +2888,18 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x2f: // cpl A (complement - bitwise NOT)
             cpuA = ~cpuA;
-            cpuF |= 0x60;
+            cpuF |= 0x60U;
             cpuPc++;
             return 4;
         case 0x30: // jr NC, d
-            if ((cpuF & 0x10) != 0x00)
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuPc += 2;
                 return 8;
             }
             else
             {
-                unsigned char msb = read8(cpuPc + 1);
+                uint8_t msb = read8(cpuPc + 1);
                 if (msb >= 0x80)
                 {
                     cpuPc -= 256 - (unsigned int)msb;
@@ -2959,7 +2912,7 @@ unsigned int Gbc::performOp()
                 return 12;
             }
         case 0x31: // ld SP, nn
-            cpuSp = ((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1);
+            cpuSp = ((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1);
             cpuPc += 3;
             return 12;
         case 0x32: // ldd (HL), A
@@ -2973,27 +2926,27 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x33: // inc SP
             cpuSp++;
-            cpuSp &= 0xffff;
+            cpuSp &= 0xffffU;
             cpuPc++;
             return 8;
         case 0x34: // inc (HL)
         {
-            cpuF &= 0x10;
+            cpuF &= 0x10U;
             unsigned int tempAddr = HL();
-            unsigned char tempByte = read8(tempAddr) + 1;
+            uint8_t tempByte = read8(tempAddr) + 1;
             SETZ_ON_ZERO(tempByte);
-            SETH_ON_ZERO(tempByte & 0x0f);
+            SETH_ON_ZERO(tempByte & 0x0fU);
             write8(tempAddr, tempByte);
         }
             cpuPc++;
             return 12;
         case 0x35: // dec (HL)
         {
-            cpuF &= 0x10;
-            cpuF |= 0x40;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
             unsigned int tempAddr = HL();
-            unsigned char tempByte = read8(tempAddr);
-            SETH_ON_ZERO(tempByte & 0x0f);
+            uint8_t tempByte = read8(tempAddr);
+            SETH_ON_ZERO(tempByte & 0x0fU);
             tempByte--;
             SETZ_ON_ZERO(tempByte);
             write8(tempAddr, tempByte);
@@ -3005,14 +2958,14 @@ unsigned int Gbc::performOp()
             cpuPc += 2;
             return 12;
         case 0x37: // SCF (set carry flag)
-            cpuF &= 0x80;
-            cpuF |= 0x10;
+            cpuF &= 0x80U;
+            cpuF |= 0x10U;
             cpuPc++;
             return 4;
         case 0x38: // jr C, n
-            if ((cpuF & 0x10) != 0x00)
+            if ((cpuF & 0x10U) != 0x00)
             {
-                unsigned char msb = read8(cpuPc + 1);
+                uint8_t msb = read8(cpuPc + 1);
                 if (msb >= 0x80)
                 {
                     cpuPc -= 256 - (unsigned int)msb;
@@ -3031,18 +2984,18 @@ unsigned int Gbc::performOp()
             }
         case 0x39: // add HL, SP
         {
-            cpuF &= 0x80;
-            unsigned char tempByte = (unsigned char)(cpuSp & 0xff);
+            cpuF &= 0x80U;
+            auto tempByte = (uint8_t)(cpuSp & 0xffU);
             cpuL += tempByte;
             if (cpuL < tempByte)
             {
                 cpuH++;
             }
-            tempByte = (unsigned char)(cpuSp >> 8);
+            tempByte = (uint8_t)(cpuSp >> 8U);
             cpuH += tempByte;
             SETC_ON_COND(cpuH < tempByte);
-            tempByte = tempByte & 0x0f;
-            SETH_ON_COND((cpuH & 0x0f) < tempByte);
+            tempByte = tempByte & 0x0fU;
+            SETH_ON_COND((cpuH & 0x0fU) < tempByte);
         }
             cpuPc++;
             return 8;
@@ -3057,21 +3010,21 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x3b: // dec SP
             cpuSp--;
-            cpuSp &= 0xffff;
+            cpuSp &= 0xffffU;
             cpuPc++;
             return 8;
         case 0x3c: // inc A
             cpuA++;
-            cpuF &= 0x10;
+            cpuF &= 0x10U;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_ZERO(cpuA & 0x0f);
+            SETH_ON_ZERO(cpuA & 0x0fU);
             cpuPc++;
             return 4;
         case 0x3d: // dec A
-            cpuF &= 0x10;
-            cpuF |= 0x40;
-            SETH_ON_ZERO(cpuA & 0x0f);
-            cpuA -= 0x01;
+            cpuF &= 0x10U;
+            cpuF |= 0x40U;
+            SETH_ON_ZERO(cpuA & 0x0fU);
+            cpuA -= 0x01U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
@@ -3081,10 +3034,10 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x3f: // ccf (invert carry flags)
         {
-            cpuF &= 0xb0;
-            unsigned char tempByte = cpuF & 0x30;
-            tempByte = tempByte ^ 0x30;
-            cpuF &= 0x80;
+            cpuF &= 0xb0U;
+            uint8_t tempByte = cpuF & 0x30U;
+            tempByte = tempByte ^ 0x30U;
+            cpuF &= 0x80U;
             cpuF |= tempByte;
         }
             cpuPc++;
@@ -3341,7 +3294,7 @@ unsigned int Gbc::performOp()
             cpuA += cpuB;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_COND((cpuB & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuB & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuB > cpuA);
             cpuPc++;
             return 4;
@@ -3349,7 +3302,7 @@ unsigned int Gbc::performOp()
             cpuA += cpuC;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_COND((cpuC & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuC & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuC > cpuA);
             cpuPc++;
             return 4;
@@ -3357,7 +3310,7 @@ unsigned int Gbc::performOp()
             cpuA += cpuD;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_COND((cpuD & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuD & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuD > cpuA);
             cpuPc++;
             return 4;
@@ -3365,7 +3318,7 @@ unsigned int Gbc::performOp()
             cpuA += cpuE;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_COND((cpuE & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuE & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuE > cpuA);
             cpuPc++;
             return 4;
@@ -3373,7 +3326,7 @@ unsigned int Gbc::performOp()
             cpuA += cpuH;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_COND((cpuH & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuH & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuH > cpuA);
             cpuPc++;
             return 4;
@@ -3381,33 +3334,33 @@ unsigned int Gbc::performOp()
             cpuA += cpuL;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
-            SETH_ON_COND((cpuL & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuL & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuL > cpuA);
             cpuPc++;
             return 4;
         case 0x86: // add (HL)
         {
-            unsigned char tempByte = R8_HL();
+            uint8_t tempByte = R8_HL();
             cpuA += tempByte;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(tempByte > cpuA);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 8;
         case 0x87: // add A
             cpuF = 0x00;
-            SETH_ON_COND((cpuA & 0x08) != 0x00);
-            SETC_ON_COND((cpuA & 0x80) != 0x00);
+            SETH_ON_COND((cpuA & 0x08U) != 0x00);
+            SETC_ON_COND((cpuA & 0x80U) != 0x00);
             cpuA += cpuA;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0x88: // adc A, B (add B + carry to A)
         {
-            unsigned char tempByte = cpuB;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuB;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3420,14 +3373,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x89: // adc A, C
         {
-            unsigned char tempByte = cpuC;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuC;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3440,14 +3393,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x8a: // adc A, D
         {
-            unsigned char tempByte = cpuD;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuD;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3460,14 +3413,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x8b: // adc A, E
         {
-            unsigned char tempByte = cpuE;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuE;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3480,14 +3433,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x8c: // adc A, H
         {
-            unsigned char tempByte = cpuH;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuH;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3500,14 +3453,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x8d: // adc A, L
         {
-            unsigned char tempByte = cpuL;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuL;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3520,14 +3473,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x8e: // adc A, (HL)
         {
-            unsigned char tempByte = R8_HL();
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = R8_HL();
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3540,14 +3493,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 8;
         case 0x8f: // adc A, A
         {
-            unsigned char tempByte = cpuA;
-            if ((cpuF & 0x10) != 0x00)
+            uint8_t tempByte = cpuA;
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuF = 0x00;
                 SETC_ON_COND(tempByte == 0xff);
@@ -3560,14 +3513,14 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 4;
         case 0x90: // sub B (sub B from A)
             cpuF = 0x40;
             SETC_ON_COND(cpuB > cpuA);
-            SETH_ON_COND((cpuB & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuB & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuB;
             if (cpuA == 0x00)
             {
@@ -3578,7 +3531,7 @@ unsigned int Gbc::performOp()
         case 0x91: // sub C
             cpuF = 0x40;
             SETC_ON_COND(cpuC > cpuA);
-            SETH_ON_COND((cpuC & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuC & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuC;
             if (cpuA == 0x00)
             {
@@ -3589,7 +3542,7 @@ unsigned int Gbc::performOp()
         case 0x92: // sub D
             cpuF = 0x40;
             SETC_ON_COND(cpuD > cpuA);
-            SETH_ON_COND((cpuD & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuD & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuD;
             if (cpuA == 0x00)
             {
@@ -3600,7 +3553,7 @@ unsigned int Gbc::performOp()
         case 0x93: // sub E
             cpuF = 0x40;
             SETC_ON_COND(cpuE > cpuA);
-            SETH_ON_COND((cpuE & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuE & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuE;
             if (cpuA == 0x00)
             {
@@ -3611,7 +3564,7 @@ unsigned int Gbc::performOp()
         case 0x94: // sub H
             cpuF = 0x40;
             SETC_ON_COND(cpuH > cpuA);
-            SETH_ON_COND((cpuH & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuH & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuH;
             if (cpuA == 0x00)
             {
@@ -3622,7 +3575,7 @@ unsigned int Gbc::performOp()
         case 0x95: // sub L
             cpuF = 0x40;
             SETC_ON_COND(cpuL > cpuA);
-            SETH_ON_COND((cpuL & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuL & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuL;
             if (cpuA == 0x00)
             {
@@ -3632,10 +3585,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x96: // sub (HL)
         {
-            unsigned char tempByte = R8_HL();
+            uint8_t tempByte = R8_HL();
             cpuF = 0x40;
             SETC_ON_COND(tempByte > cpuA);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= tempByte;
             if (cpuA == 0x00)
             {
@@ -3651,10 +3604,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x98: // sbc A, B (A = A - (B+carry))
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(cpuB > cpuA);
-            SETH_ON_COND((cpuB & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuB & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuB;
             if (tempByte != 0x00)
             {
@@ -3674,10 +3627,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x99: // sbc A, C
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(cpuC > cpuA);
-            SETH_ON_COND((cpuC & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuC & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuC;
             if (tempByte != 0x00)
             {
@@ -3697,10 +3650,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x9a: // sbc A, D
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(cpuD > cpuA);
-            SETH_ON_COND((cpuD & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuD & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuD;
             if (tempByte != 0x00)
             {
@@ -3720,10 +3673,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x9b: // sbc A, E
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(cpuE > cpuA);
-            SETH_ON_COND((cpuE & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuE & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuE;
             if (tempByte != 0x00)
             {
@@ -3743,10 +3696,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x9c: // sbc A, H
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(cpuH > cpuA);
-            SETH_ON_COND((cpuH & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuH & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuH;
             if (tempByte != 0x00)
             {
@@ -3766,10 +3719,10 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x9d: // sbc A, L
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(cpuL > cpuA);
-            SETH_ON_COND((cpuL & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuL & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= cpuL;
             if (tempByte != 0x00)
             {
@@ -3789,11 +3742,11 @@ unsigned int Gbc::performOp()
             return 4;
         case 0x9e: // sbc A, (HL)
         {
-            unsigned char tempByte = R8_HL();
-            unsigned char tempByte2 = cpuF & 0x10;
+            uint8_t tempByte = R8_HL();
+            uint8_t tempByte2 = cpuF & 0x10U;
             cpuF = 0x40;
             SETC_ON_COND(tempByte > cpuA);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= tempByte;
             if (tempByte2 != 0x00)
             {
@@ -3813,7 +3766,7 @@ unsigned int Gbc::performOp()
             return 8;
         case 0x9f: // sbc A, A
         {
-            unsigned char tempByte = cpuF & 0x10;
+            uint8_t tempByte = cpuF & 0x10U;
             cpuF = 0x40;
             cpuA = 0;
             if (tempByte != 0x00)
@@ -3834,48 +3787,48 @@ unsigned int Gbc::performOp()
             return 4;
         case 0xa0: // and B (and B against A)
             cpuA = cpuA & cpuB;
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0xa1: // and C
             cpuA = cpuA & cpuC;
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0xa2: // and D
             cpuA = cpuA & cpuD;
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0xa3: // and E
             cpuA = cpuA & cpuE;
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0xa4: // and H
             cpuA = cpuA & cpuH;
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0xa5: // and L
             cpuA = cpuA & cpuL;
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
         case 0xa6: // and (HL)
             cpuA = cpuA & R8_HL();
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 8;
         case 0xa7: // and A
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc++;
             return 4;
@@ -3923,7 +3876,7 @@ unsigned int Gbc::performOp()
             return 8;
         case 0xaf: // xor A
             cpuA = 0x00;
-            cpuF = 0x80;
+            cpuF = 0x80U;
             cpuPc++;
             return 4;
         case 0xb0: // or B (or B against A)
@@ -3975,53 +3928,53 @@ unsigned int Gbc::performOp()
             return 4;
         case 0xb8: // cp B
             cpuF = 0x40;
-            SETH_ON_COND((cpuB & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuB & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuB > cpuA);
             SETZ_ON_COND(cpuA == cpuB);
             cpuPc++;
             return 4;
         case 0xb9: // cp C
             cpuF = 0x40;
-            SETH_ON_COND((cpuC & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuC & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuC > cpuA);
             SETZ_ON_COND(cpuA == cpuC);
             cpuPc++;
             return 4;
         case 0xba: // cp D
             cpuF = 0x40;
-            SETH_ON_COND((cpuD & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuD & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuD > cpuA);
             SETZ_ON_COND(cpuA == cpuD);
             cpuPc++;
             return 4;
         case 0xbb: // cp E
             cpuF = 0x40;
-            SETH_ON_COND((cpuE & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuE & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuE > cpuA);
             SETZ_ON_COND(cpuA == cpuE);
             cpuPc++;
             return 4;
         case 0xbc: // cp H
             cpuF = 0x40;
-            SETH_ON_COND((cpuH & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuH & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuH > cpuA);
             SETZ_ON_COND(cpuA == cpuH);
             cpuPc++;
             return 4;
         case 0xbd: // cp L
             cpuF = 0x40;
-            SETH_ON_COND((cpuL & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((cpuL & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(cpuL > cpuA);
             SETZ_ON_COND(cpuA == cpuL);
             cpuPc++;
             return 4;
         case 0xbe: // cp (HL)
         {
-            unsigned char tempByte = R8_HL();
+            uint8_t tempByte = R8_HL();
             cpuF = 0x40;
             SETC_ON_COND(tempByte > cpuA);
             SETZ_ON_COND(cpuA == tempByte);
-            SETH_ON_COND((tempByte & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((tempByte & 0x0fU) > (cpuA & 0x0fU));
         }
             cpuPc++;
             return 8;
@@ -4030,7 +3983,7 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 4;
         case 0xc0: // ret NZ
-            if ((cpuF & 0x80) != 0x00) {
+            if ((cpuF & 0x80U) != 0x00) {
                 cpuPc++;
                 return 8;
             } else {
@@ -4039,10 +3992,10 @@ unsigned int Gbc::performOp()
                     debugger.breakLastCallReturned = 1;
                 }
 #endif
-                unsigned char msb, lsb;
+                uint8_t msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 20;
             }
         case 0xc1: // pop BC
@@ -4051,40 +4004,40 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 12;
         case 0xc2: // j NZ, nn
-            if ((cpuF & 0x80) != 0x00)
+            if ((cpuF & 0x80U) != 0x00)
             {
                 cpuPc += 3;
                 return 12;
             }
             else
             {
-                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1);
+                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1);
                 return 16;
             }
         case 0xc3: // jump to nn
-            cpuPc = ((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1);
+            cpuPc = ((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1);
             return 16;
         case 0xc4: // call NZ, nn
-            if ((cpuF & 0x80) != 0x00)
+            if ((cpuF & 0x80U) != 0x00)
             {
                 cpuPc += 3;
                 return 12;
             }
             else
             {
-                unsigned char msb = read8(cpuPc + 1);
-                unsigned char lsb = read8(cpuPc + 2);
+                uint8_t msb = read8(cpuPc + 1);
+                uint8_t lsb = read8(cpuPc + 2);
 #ifdef _WIN32
                 if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
-                    debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                    debugger.breakLastCallTo = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
 #endif
                 cpuPc += 3;
                 cpuSp -= 2;
-                write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 24;
             }
         case 0xc5: // push BC
@@ -4094,12 +4047,12 @@ unsigned int Gbc::performOp()
             return 16;
         case 0xc6: // add A, n
         {
-            unsigned char msb = read8(cpuPc + 1);
+            uint8_t msb = read8(cpuPc + 1);
             cpuA += msb;
             cpuF = 0x00;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < msb);
-            SETH_ON_COND((cpuA & 0x0f) < (msb & 0x0f));
+            SETH_ON_COND((cpuA & 0x0fU) < (msb & 0x0fU));
         }
             cpuPc += 2;
             return 8;
@@ -4113,20 +4066,20 @@ unsigned int Gbc::performOp()
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x00;
             return 16;
         case 0xc8: // ret Z
-            if ((cpuF & 0x80) != 0x00) {
+            if ((cpuF & 0x80U) != 0x00) {
 #ifdef _WIN32
                 if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallReturned = 1;
                 }
 #endif
-                unsigned char msb, lsb;
+                uint8_t msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 20;
             }
             else
@@ -4141,16 +4094,16 @@ unsigned int Gbc::performOp()
                 debugger.breakLastCallReturned = 1;
             }
 #endif
-            unsigned char msb, lsb;
+            uint8_t msb, lsb;
             read16(cpuSp, &msb, &lsb);
             cpuSp += 2;
-            cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+            cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
         }
             return 16;
         case 0xca: // j Z, nn
-            if ((cpuF & 0x80) != 0x00)
+            if ((cpuF & 0x80U) != 0x00)
             {
-                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1);
+                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1);
                 return 16;
             }
             else
@@ -4164,78 +4117,78 @@ unsigned int Gbc::performOp()
             {
                 case 0x00: // rlc B
                 {
-                    unsigned char tempByte = cpuB & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuB & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuB = cpuB << 1;
+                    cpuB = cpuB << 1U;
                     if (tempByte != 0)
                     {
-                        cpuB |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuB |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuB);
                 }
                     return 8;
                 case 0x01: // rlc C
                 {
-                    unsigned char tempByte = cpuC & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuC & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuC = cpuC << 1;
+                    cpuC = cpuC << 1U;
                     if (tempByte != 0)
                     {
-                        cpuC |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuC |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuC);
                 }
                     return 8;
                 case 0x02: // rlc D
                 {
-                    unsigned char tempByte = cpuD & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuD & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuD = cpuD << 1;
+                    cpuD = cpuD << 1U;
                     if (tempByte != 0)
                     {
-                        cpuD |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuD |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuD);
                 }
                     return 8;
                 case 0x03: // rlc E
                 {
-                    unsigned char tempByte = cpuE & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuE & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuE = cpuE << 1;
+                    cpuE = cpuE << 1U;
                     if (tempByte != 0)
                     {
-                        cpuE |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuE |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuE);
                 }
                     return 8;
                 case 0x04: // rlc H
                 {
-                    unsigned char tempByte = cpuH & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuH & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuH = cpuH << 1;
+                    cpuH = cpuH << 1U;
                     if (tempByte != 0)
                     {
-                        cpuH |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuH |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuH);
                 }
                     return 8;
                 case 0x05: // rlc L
                 {
-                    unsigned char tempByte = cpuL & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuL & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuL = cpuL << 1;
+                    cpuL = cpuL << 1U;
                     if (tempByte != 0)
                     {
-                        cpuL |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuL |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuL);
                 }
@@ -4243,14 +4196,14 @@ unsigned int Gbc::performOp()
                 case 0x06: // rlc (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte2 = read8(tempAddr);
-                    unsigned char tempByte = tempByte2 & 0x80; // True if bit 7 is set
+                    uint8_t tempByte2 = read8(tempAddr);
+                    uint8_t tempByte = tempByte2 & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    tempByte2 = tempByte2 << 1;
+                    tempByte2 = tempByte2 << 1U;
                     if (tempByte != 0)
                     {
-                        tempByte2 |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        tempByte2 |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(tempByte2);
                     write8(tempAddr, tempByte2);
@@ -4258,97 +4211,97 @@ unsigned int Gbc::performOp()
                     return 16;
                 case 0x07: // rlc A
                 {
-                    unsigned char tempByte = cpuA & 0x80; // True if bit 7 is set
+                    uint8_t tempByte = cpuA & 0x80U; // True if bit 7 is set
                     cpuF = 0x00; // Reset all other flags
-                    cpuA = cpuA << 1;
+                    cpuA = cpuA << 1U;
                     if (tempByte != 0)
                     {
-                        cpuA |= 0x01;
-                        cpuF = 0x10; // Set carry
+                        cpuA |= 0x01U;
+                        cpuF = 0x10U; // Set carry
                     }
                     SETZ_ON_ZERO(cpuA);
                 }
                     return 8;
                 case 0x08: // rrc B
                 {
-                    unsigned char tempByte = cpuB & 0x01;
+                    uint8_t tempByte = cpuB & 0x01U;
                     cpuF = 0x00;
-                    cpuB = cpuB >> 1;
-                    cpuB &= 0x7f;
+                    cpuB = cpuB >> 1U;
+                    cpuB &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuB |= 0x80;
+                        cpuF = 0x10U;
+                        cpuB |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuB);
                 }
                     return 8;
                 case 0x09: // rrc C
                 {
-                    unsigned char tempByte = cpuC & 0x01;
+                    uint8_t tempByte = cpuC & 0x01U;
                     cpuF = 0x00;
-                    cpuC = cpuC >> 1;
-                    cpuC &= 0x7f;
+                    cpuC = cpuC >> 1U;
+                    cpuC &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuC |= 0x80;
+                        cpuF = 0x10U;
+                        cpuC |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuC);
                 }
                     return 8;
                 case 0x0a: // rrc D
                 {
-                    unsigned char tempByte = cpuD & 0x01;
+                    uint8_t tempByte = cpuD & 0x01U;
                     cpuF = 0x00;
-                    cpuD = cpuD >> 1;
-                    cpuD &= 0x7f;
+                    cpuD = cpuD >> 1U;
+                    cpuD &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuD |= 0x80;
+                        cpuF = 0x10U;
+                        cpuD |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuD);
                 }
                     return 8;
                 case 0x0b: // rrc E
                 {
-                    unsigned char tempByte = cpuE & 0x01;
+                    uint8_t tempByte = cpuE & 0x01U;
                     cpuF = 0x00;
-                    cpuE = cpuE >> 1;
-                    cpuE &= 0x7f;
+                    cpuE = cpuE >> 1U;
+                    cpuE &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuE |= 0x80;
+                        cpuF = 0x10U;
+                        cpuE |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuE);
                 }
                     return 8;
                 case 0x0c: // rrc H
                 {
-                    unsigned char tempByte = cpuH & 0x01;
+                    uint8_t tempByte = cpuH & 0x01U;
                     cpuF = 0x00;
-                    cpuH = cpuH >> 1;
-                    cpuH &= 0x7f;
+                    cpuH = cpuH >> 1U;
+                    cpuH &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuH |= 0x80;
+                        cpuF = 0x10U;
+                        cpuH |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuH);
                 }
                     return 8;
                 case 0x0d: // rrc L
                 {
-                    unsigned char tempByte = cpuL & 0x01;
+                    uint8_t tempByte = cpuL & 0x01U;
                     cpuF = 0x00;
-                    cpuL = cpuL >> 1;
-                    cpuL &= 0x7f;
+                    cpuL = cpuL >> 1U;
+                    cpuL &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuL |= 0x80;
+                        cpuF = 0x10U;
+                        cpuL |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuL);
                 }
@@ -4356,15 +4309,15 @@ unsigned int Gbc::performOp()
                 case 0x0e: // rrc (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte = read8(tempAddr);
-                    unsigned char tempByte2 = tempByte & 0x01;
+                    uint8_t tempByte = read8(tempAddr);
+                    uint8_t tempByte2 = tempByte & 0x01U;
                     cpuF = 0x00;
-                    tempByte = tempByte >> 1;
-                    tempByte &= 0x7f;
+                    tempByte = tempByte >> 1U;
+                    tempByte &= 0x7fU;
                     if (tempByte2 != 0)
                     {
-                        cpuF = 0x10;
-                        tempByte |= 0x80;
+                        cpuF = 0x10U;
+                        tempByte |= 0x80U;
                     }
                     SETZ_ON_ZERO(tempByte);
                     write8(tempAddr, tempByte);
@@ -4372,92 +4325,92 @@ unsigned int Gbc::performOp()
                     return 16;
                 case 0x0f: // rrc A
                 {
-                    unsigned char tempByte = cpuA & 0x01;
+                    uint8_t tempByte = cpuA & 0x01U;
                     cpuF = 0x00;
-                    cpuA = cpuA >> 1;
-                    cpuA &= 0x7f;
+                    cpuA = cpuA >> 1U;
+                    cpuA &= 0x7fU;
                     if (tempByte != 0)
                     {
-                        cpuF = 0x10;
-                        cpuA |= 0x80;
+                        cpuF = 0x10U;
+                        cpuA |= 0x80U;
                     }
                     SETZ_ON_ZERO(cpuA);
                 }
                     return 8;
                 case 0x10: // rl B (rotate carry bit to bit 0 of B)
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuB & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuB = cpuB << 1;
+                    SETC_ON_COND((cpuB & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuB = cpuB << 1U;
                     if (tempByte != 0)
                     {
-                        cpuB |= 0x01; // Copy carry flag to bit 0
+                        cpuB |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuB);
                 }
                     return 8;
                 case 0x11: // rl C
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuC & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuC = cpuC << 1;
+                    SETC_ON_COND((cpuC & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuC = cpuC << 1U;
                     if (tempByte != 0)
                     {
-                        cpuC |= 0x01; // Copy carry flag to bit 0
+                        cpuC |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuC);
                 }
                     return 8;
                 case 0x12: // rl D
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuD & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuD = cpuD << 1;
+                    SETC_ON_COND((cpuD & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuD = cpuD << 1U;
                     if (tempByte != 0)
                     {
-                        cpuD |= 0x01; // Copy carry flag to bit 0
+                        cpuD |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuD);
                 }
                     return 8;
                 case 0x13: // rl E
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuE & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuE = cpuE << 1;
+                    SETC_ON_COND((cpuE & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuE = cpuE << 1U;
                     if (tempByte != 0)
                     {
-                        cpuE |= 0x01; // Copy carry flag to bit 0
+                        cpuE |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuE);
                 }
                     return 8;
                 case 0x14: // rl H
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuH & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuH = cpuH << 1;
+                    SETC_ON_COND((cpuH & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuH = cpuH << 1U;
                     if (tempByte != 0)
                     {
-                        cpuH |= 0x01; // Copy carry flag to bit 0
+                        cpuH |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuH);
                 }
                     return 8;
                 case 0x15: // rl L
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuL & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuL = cpuL << 1;
+                    SETC_ON_COND((cpuL & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuL = cpuL << 1U;
                     if (tempByte != 0)
                     {
-                        cpuL |= 0x01; // Copy carry flag to bit 0
+                        cpuL |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuL);
                 }
@@ -4465,14 +4418,14 @@ unsigned int Gbc::performOp()
                 case 0x16: // rl (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte2 = read8(tempAddr);
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte2 = read8(tempAddr);
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((tempByte2 & 0x80) != 0); // Copy bit 7 to carry bit
-                    tempByte2 = tempByte2 << 1;
+                    SETC_ON_COND((tempByte2 & 0x80U) != 0); // Copy bit 7 to carry bit
+                    tempByte2 = tempByte2 << 1U;
                     if (tempByte != 0)
                     {
-                        tempByte2 |= 0x01; // Copy carry flag to bit 0
+                        tempByte2 |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(tempByte2);
                     write8(tempAddr, tempByte2);
@@ -4480,27 +4433,27 @@ unsigned int Gbc::performOp()
                     return 16;
                 case 0x17: // rl A
                 {
-                    unsigned char tempByte = cpuF & 0x10; // True if carry flag was set
+                    uint8_t tempByte = cpuF & 0x10U; // True if carry flag was set
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuA & 0x80) != 0); // Copy bit 7 to carry bit
-                    cpuA = cpuA << 1;
+                    SETC_ON_COND((cpuA & 0x80U) != 0); // Copy bit 7 to carry bit
+                    cpuA = cpuA << 1U;
                     if (tempByte != 0)
                     {
-                        cpuA |= 0x01; // Copy carry flag to bit 0
+                        cpuA |= 0x01U; // Copy carry flag to bit 0
                     }
                     SETZ_ON_ZERO(cpuA);
                 }
                     return 8;
                 case 0x18: // rr B (9-bit rotation incl carry bit)
                 {
-                    unsigned char tempByte = cpuB & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuB = cpuB >> 1;
-                    cpuB = cpuB & 0x7f;
+                    uint8_t tempByte = cpuB & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuB = cpuB >> 1U;
+                    cpuB = cpuB & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuB |= 0x80;
+                        cpuB |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuB);
@@ -4508,14 +4461,14 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x19: // rr C
                 {
-                    unsigned char tempByte = cpuC & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuC = cpuC >> 1;
-                    cpuC = cpuC & 0x7f;
+                    uint8_t tempByte = cpuC & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuC = cpuC >> 1U;
+                    cpuC = cpuC & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuC |= 0x80;
+                        cpuC |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuC);
@@ -4523,14 +4476,14 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x1a: // rr D
                 {
-                    unsigned char tempByte = cpuD & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuD = cpuD >> 1;
-                    cpuD = cpuD & 0x7f;
+                    uint8_t tempByte = cpuD & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuD = cpuD >> 1U;
+                    cpuD = cpuD & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuD |= 0x80;
+                        cpuD |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuD);
@@ -4538,14 +4491,14 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x1b: // rr E
                 {
-                    unsigned char tempByte = cpuE & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuE = cpuE >> 1;
-                    cpuE = cpuE & 0x7f;
+                    uint8_t tempByte = cpuE & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuE = cpuE >> 1U;
+                    cpuE = cpuE & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuE |= 0x80;
+                        cpuE |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuE);
@@ -4553,14 +4506,14 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x1c: // rr H
                 {
-                    unsigned char tempByte = cpuH & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuH = cpuH >> 1;
-                    cpuH = cpuH & 0x7f;
+                    uint8_t tempByte = cpuH & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuH = cpuH >> 1U;
+                    cpuH = cpuH & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuH |= 0x80;
+                        cpuH |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuH);
@@ -4568,14 +4521,14 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x1d: // rr L
                 {
-                    unsigned char tempByte = cpuL & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuL = cpuL >> 1;
-                    cpuL = cpuL & 0x7f;
+                    uint8_t tempByte = cpuL & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuL = cpuL >> 1U;
+                    cpuL = cpuL & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuL |= 0x80;
+                        cpuL |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuL);
@@ -4584,15 +4537,15 @@ unsigned int Gbc::performOp()
                 case 0x1e: // rr (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte3 = read8(tempAddr);
-                    unsigned char tempByte = tempByte3 & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    tempByte3 = tempByte3 >> 1;
-                    tempByte3 = tempByte3 & 0x7f;
+                    uint8_t tempByte3 = read8(tempAddr);
+                    uint8_t tempByte = tempByte3 & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    tempByte3 = tempByte3 >> 1U;
+                    tempByte3 = tempByte3 & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        tempByte3 |= 0x80;
+                        tempByte3 |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_COND(tempByte3 == 0x00);
@@ -4601,14 +4554,14 @@ unsigned int Gbc::performOp()
                     return 16;
                 case 0x1f: // rr A
                 {
-                    unsigned char tempByte = cpuA & 0x01;
-                    unsigned char tempByte2 = cpuF & 0x10;
-                    cpuA = cpuA >> 1;
-                    cpuA = cpuA & 0x7f;
+                    uint8_t tempByte = cpuA & 0x01U;
+                    uint8_t tempByte2 = cpuF & 0x10U;
+                    cpuA = cpuA >> 1U;
+                    cpuA = cpuA & 0x7fU;
                     cpuF = 0x00;
                     if (tempByte2 != 0x00)
                     {
-                        cpuA |= 0x80;
+                        cpuA |= 0x80U;
                     }
                     SETC_ON_COND(tempByte != 0x00);
                     SETZ_ON_ZERO(cpuA);
@@ -4616,63 +4569,63 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x20: // sla B (shift B left arithmetically)
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuB & 0x80) != 0x00);
-                    cpuB = cpuB << 1;
+                    SETC_ON_COND((cpuB & 0x80U) != 0x00);
+                    cpuB = cpuB << 1U;
                     SETZ_ON_ZERO(cpuB);
                     return 8;
                 case 0x21: // sla C
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuC & 0x80) != 0x00);
-                    cpuC = cpuC << 1;
+                    SETC_ON_COND((cpuC & 0x80U) != 0x00);
+                    cpuC = cpuC << 1U;
                     SETZ_ON_ZERO(cpuC);
                     return 8;
                 case 0x22: // sla D
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuD & 0x80) != 0x00);
-                    cpuD = cpuD << 1;
+                    SETC_ON_COND((cpuD & 0x80U) != 0x00);
+                    cpuD = cpuD << 1U;
                     SETZ_ON_ZERO(cpuD);
                     return 8;
                 case 0x23: // sla E
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuE & 0x80) != 0x00);
-                    cpuE = cpuE << 1;
+                    SETC_ON_COND((cpuE & 0x80U) != 0x00);
+                    cpuE = cpuE << 1U;
                     SETZ_ON_ZERO(cpuE);
                     return 8;
                 case 0x24: // sla H
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuH & 0x80) != 0x00);
-                    cpuH = cpuH << 1;
+                    SETC_ON_COND((cpuH & 0x80U) != 0x00);
+                    cpuH = cpuH << 1U;
                     SETZ_ON_ZERO(cpuH);
                     return 8;
                 case 0x25: // sla L
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuL & 0x80) != 0x00);
-                    cpuL = cpuL << 1;
+                    SETC_ON_COND((cpuL & 0x80U) != 0x00);
+                    cpuL = cpuL << 1U;
                     SETZ_ON_ZERO(cpuL);
                     return 8;
                 case 0x26: // sla (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte = read8(tempAddr);
+                    uint8_t tempByte = read8(tempAddr);
                     cpuF = 0x00;
-                    SETC_ON_COND((tempByte & 0x80) != 0x00);
-                    tempByte = tempByte << 1;
+                    SETC_ON_COND((tempByte & 0x80U) != 0x00);
+                    tempByte = tempByte << 1U;
                     SETZ_ON_ZERO(tempByte);
                     write8(tempAddr, tempByte);
                 }
                     return 16;
                 case 0x27: // sla A
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuA & 0x80) != 0x00);
-                    cpuA = cpuA << 1;
+                    SETC_ON_COND((cpuA & 0x80U) != 0x00);
+                    cpuA = cpuA << 1U;
                     SETZ_ON_ZERO(cpuA);
                     return 8;
                 case 0x28: // sra B (shift B right arithmetically - preserve sign bit)
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuB & 0x01) != 0x00);
-                    unsigned char tempByte = cpuB & 0x80;
-                    cpuB = cpuB >> 1;
+                    SETC_ON_COND((cpuB & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuB & 0x80U;
+                    cpuB = cpuB >> 1U;
                     cpuB |= tempByte;
                     SETZ_ON_ZERO(cpuB);
                 }
@@ -4680,9 +4633,9 @@ unsigned int Gbc::performOp()
                 case 0x29: // sra C
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuC & 0x01) != 0x00);
-                    unsigned char tempByte = cpuC & 0x80;
-                    cpuC = cpuC >> 1;
+                    SETC_ON_COND((cpuC & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuC & 0x80U;
+                    cpuC = cpuC >> 1U;
                     cpuC |= tempByte;
                     SETZ_ON_ZERO(cpuC);
                 }
@@ -4690,9 +4643,9 @@ unsigned int Gbc::performOp()
                 case 0x2a: // sra D
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuD & 0x01) != 0x00);
-                    unsigned char tempByte = cpuD & 0x80;
-                    cpuD = cpuD >> 1;
+                    SETC_ON_COND((cpuD & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuD & 0x80U;
+                    cpuD = cpuD >> 1U;
                     cpuD |= tempByte;
                     SETZ_ON_ZERO(cpuD);
                 }
@@ -4700,9 +4653,9 @@ unsigned int Gbc::performOp()
                 case 0x2b: // sra E
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuE & 0x01) != 0x00);
-                    unsigned char tempByte = cpuE & 0x80;
-                    cpuE = cpuE >> 1;
+                    SETC_ON_COND((cpuE & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuE & 0x80U;
+                    cpuE = cpuE >> 1U;
                     cpuE |= tempByte;
                     SETZ_ON_ZERO(cpuE);
                 }
@@ -4710,9 +4663,9 @@ unsigned int Gbc::performOp()
                 case 0x2c: // sra H
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuH & 0x01) != 0x00);
-                    unsigned char tempByte = cpuH & 0x80;
-                    cpuH = cpuH >> 1;
+                    SETC_ON_COND((cpuH & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuH & 0x80U;
+                    cpuH = cpuH >> 1U;
                     cpuH |= tempByte;
                     SETZ_ON_ZERO(cpuH);
                 }
@@ -4720,9 +4673,9 @@ unsigned int Gbc::performOp()
                 case 0x2d: // sra L
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuL & 0x01) != 0x00);
-                    unsigned char tempByte = cpuL & 0x80;
-                    cpuL = cpuL >> 1;
+                    SETC_ON_COND((cpuL & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuL & 0x80U;
+                    cpuL = cpuL >> 1U;
                     cpuL |= tempByte;
                     SETZ_ON_ZERO(cpuL);
                 }
@@ -4731,10 +4684,10 @@ unsigned int Gbc::performOp()
                 {
                     cpuF = 0x00;
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte = read8(tempAddr);
-                    SETC_ON_COND((tempByte & 0x01) != 0x00);
-                    unsigned char tempByte2 = tempByte & 0x80;
-                    tempByte = tempByte >> 1;
+                    uint8_t tempByte = read8(tempAddr);
+                    SETC_ON_COND((tempByte & 0x01U) != 0x00);
+                    uint8_t tempByte2 = tempByte & 0x80U;
+                    tempByte = tempByte >> 1U;
                     tempByte |= tempByte2;
                     SETZ_ON_ZERO(tempByte);
                     write8(tempAddr, tempByte);
@@ -4743,18 +4696,18 @@ unsigned int Gbc::performOp()
                 case 0x2f: // sra A
                 {
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuA & 0x01) != 0x00);
-                    unsigned char tempByte = cpuA & 0x80;
-                    cpuA = cpuA >> 1;
+                    SETC_ON_COND((cpuA & 0x01U) != 0x00);
+                    uint8_t tempByte = cpuA & 0x80U;
+                    cpuA = cpuA >> 1U;
                     cpuA |= tempByte;
                     SETZ_ON_ZERO(cpuA);
                 }
                     return 8;
                 case 0x30: // swap B
                 {
-                    unsigned char tempByte = (cpuB << 4);
-                    cpuB = cpuB >> 4;
-                    cpuB &= 0x0f;
+                    uint8_t tempByte = (cpuB << 4U);
+                    cpuB = cpuB >> 4U;
+                    cpuB &= 0x0fU;
                     cpuB |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuB);
@@ -4762,9 +4715,9 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x31: // swap C
                 {
-                    unsigned char tempByte = (cpuC << 4);
-                    cpuC = cpuC >> 4;
-                    cpuC &= 0x0f;
+                    uint8_t tempByte = (cpuC << 4U);
+                    cpuC = cpuC >> 4U;
+                    cpuC &= 0x0fU;
                     cpuC |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuC);
@@ -4772,9 +4725,9 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x32: // swap D
                 {
-                    unsigned char tempByte = (cpuD << 4);
-                    cpuD = cpuD >> 4;
-                    cpuD &= 0x0f;
+                    uint8_t tempByte = (cpuD << 4U);
+                    cpuD = cpuD >> 4U;
+                    cpuD &= 0x0fU;
                     cpuD |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuD);
@@ -4782,9 +4735,9 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x33: // swap E
                 {
-                    unsigned char tempByte = (cpuE << 4);
-                    cpuE = cpuE >> 4;
-                    cpuE &= 0x0f;
+                    uint8_t tempByte = (cpuE << 4U);
+                    cpuE = cpuE >> 4U;
+                    cpuE &= 0x0fU;
                     cpuE |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuE);
@@ -4792,9 +4745,9 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x34: // swap H
                 {
-                    unsigned char tempByte = (cpuH << 4);
-                    cpuH = cpuH >> 4;
-                    cpuH &= 0x0f;
+                    uint8_t tempByte = (cpuH << 4U);
+                    cpuH = cpuH >> 4U;
+                    cpuH &= 0x0fU;
                     cpuH |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuH);
@@ -4802,9 +4755,9 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x35: // swap L
                 {
-                    unsigned char tempByte = (cpuL << 4);
-                    cpuL = cpuL >> 4;
-                    cpuL &= 0x0f;
+                    uint8_t tempByte = (cpuL << 4U);
+                    cpuL = cpuL >> 4U;
+                    cpuL &= 0x0fU;
                     cpuL |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuL);
@@ -4813,10 +4766,10 @@ unsigned int Gbc::performOp()
                 case 0x36: // swap (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte = read8(tempAddr);
-                    unsigned char tempByte2 = (tempByte << 4);
-                    tempByte = tempByte >> 4;
-                    tempByte &= 0x0f;
+                    uint8_t tempByte = read8(tempAddr);
+                    uint8_t tempByte2 = (tempByte << 4U);
+                    tempByte = tempByte >> 4U;
+                    tempByte &= 0x0fU;
                     tempByte |= tempByte2;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(tempByte);
@@ -4825,9 +4778,9 @@ unsigned int Gbc::performOp()
                     return 16;
                 case 0x37: // swap A
                 {
-                    unsigned char tempByte = (cpuA << 4);
-                    cpuA = cpuA >> 4;
-                    cpuA &= 0x0f;
+                    uint8_t tempByte = (cpuA << 4U);
+                    cpuA = cpuA >> 4U;
+                    cpuA &= 0x0fU;
                     cpuA |= tempByte;
                     cpuF = 0x00;
                     SETZ_ON_ZERO(cpuA);
@@ -4835,834 +4788,834 @@ unsigned int Gbc::performOp()
                     return 8;
                 case 0x38: // srl B
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuB & 0x01) != 0x00);
-                    cpuB = cpuB >> 1;
-                    cpuB &= 0x7f;
+                    SETC_ON_COND((cpuB & 0x01U) != 0x00);
+                    cpuB = cpuB >> 1U;
+                    cpuB &= 0x7fU;
                     SETZ_ON_ZERO(cpuB);
                     return 8;
                 case 0x39: // srl C
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuC & 0x01) != 0x00);
-                    cpuC = cpuC >> 1;
-                    cpuC &= 0x7f;
+                    SETC_ON_COND((cpuC & 0x01U) != 0x00);
+                    cpuC = cpuC >> 1U;
+                    cpuC &= 0x7fU;
                     SETZ_ON_ZERO(cpuC);
                     return 8;
                 case 0x3a: // srl D
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuD & 0x01) != 0x00);
-                    cpuD = cpuD >> 1;
-                    cpuD &= 0x7f;
+                    SETC_ON_COND((cpuD & 0x01U) != 0x00);
+                    cpuD = cpuD >> 1U;
+                    cpuD &= 0x7fU;
                     SETZ_ON_ZERO(cpuD);
                     return 8;
                 case 0x3b: // srl E
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuE & 0x01) != 0x00);
-                    cpuE = cpuE >> 1;
-                    cpuE &= 0x7f;
+                    SETC_ON_COND((cpuE & 0x01U) != 0x00);
+                    cpuE = cpuE >> 1U;
+                    cpuE &= 0x7fU;
                     SETZ_ON_ZERO(cpuE);
                     return 8;
                 case 0x3c: // srl H
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuH & 0x01) != 0x00);
-                    cpuH = cpuH >> 1;
-                    cpuH &= 0x7f;
+                    SETC_ON_COND((cpuH & 0x01U) != 0x00);
+                    cpuH = cpuH >> 1U;
+                    cpuH &= 0x7fU;
                     SETZ_ON_ZERO(cpuH);
                     return 8;
                 case 0x3d: // srl L
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuL & 0x01) != 0x00);
-                    cpuL = cpuL >> 1;
-                    cpuL &= 0x7f;
+                    SETC_ON_COND((cpuL & 0x01U) != 0x00);
+                    cpuL = cpuL >> 1U;
+                    cpuL &= 0x7fU;
                     SETZ_ON_ZERO(cpuL);
                     return 8;
                 case 0x3e: // srl (HL)
                 {
                     unsigned int tempAddr = HL();
-                    unsigned char tempByte = read8(tempAddr);
+                    uint8_t tempByte = read8(tempAddr);
                     cpuF = 0x00;
-                    SETC_ON_COND((tempByte & 0x01) != 0x00);
-                    tempByte = tempByte >> 1;
-                    tempByte &= 0x7f;
+                    SETC_ON_COND((tempByte & 0x01U) != 0x00);
+                    tempByte = tempByte >> 1U;
+                    tempByte &= 0x7fU;
                     SETZ_ON_ZERO(tempByte);
                     write8(tempAddr, tempByte);
                 }
                     return 16;
                 case 0x3f: // srl A
                     cpuF = 0x00;
-                    SETC_ON_COND((cpuA & 0x01) != 0x00);
-                    cpuA = cpuA >> 1;
-                    cpuA &= 0x7f;
+                    SETC_ON_COND((cpuA & 0x01U) != 0x00);
+                    cpuA = cpuA >> 1U;
+                    cpuA &= 0x7fU;
                     SETZ_ON_ZERO(cpuA);
                     return 8;
                 case 0x40: // Test bit 0 of B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x01U);
                     return 8;
                 case 0x41: // Test bit 0 of C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x01U);
                     return 8;
                 case 0x42: // Test bit 0 of D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x01U);
                     return 8;
                 case 0x43: // Test bit 0 of E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x01U);
                     return 8;
                 case 0x44: // Test bit 0 of H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x01U);
                     return 8;
                 case 0x45: // Test bit 0 of L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x01U);
                     return 8;
                 case 0x46: // Test bit 0 of (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x01U);
                     return 12;
                 case 0x47: // Test bit 0 of A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x01);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x01U);
                     return 8;
                 case 0x48: // bit 1, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x02U);
                     return 8;
                 case 0x49: // bit 1, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x02U);
                     return 8;
                 case 0x4a: // bit 1, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x02U);
                     return 8;
                 case 0x4b: // bit 1, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x02U);
                     return 8;
                 case 0x4c: // bit 1, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x02U);
                     return 8;
                 case 0x4d: // bit 1, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x02U);
                     return 8;
                 case 0x4e: // bit 1, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x02U);
                     return 12;
                 case 0x4f: // bit 1, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x02);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x02U);
                     return 8;
                 case 0x50: // bit 2, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x04U);
                     return 8;
                 case 0x51: // bit 2, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x04U);
                     return 8;
                 case 0x52: // bit 2, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x04U);
                     return 8;
                 case 0x53: // bit 2, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x04U);
                     return 8;
                 case 0x54: // bit 2, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x04U);
                     return 8;
                 case 0x55: // bit 2, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x04U);
                     return 8;
                 case 0x56: // bit 2, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x04U);
                     return 12;
                 case 0x57: // bit 2, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x04);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x04U);
                     return 8;
                 case 0x58: // bit 3, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x08U);
                     return 8;
                 case 0x59: // bit 3, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x08U);
                     return 8;
                 case 0x5a: // bit 3, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x08U);
                     return 8;
                 case 0x5b: // bit 3, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x08U);
                     return 8;
                 case 0x5c: // bit 3, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x08U);
                     return 8;
                 case 0x5d: // bit 3, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x08U);
                     return 8;
                 case 0x5e: // bit 3, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x08U);
                     return 12;
                 case 0x5f: // bit 3, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x08);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x08U);
                     return 8;
                 case 0x60: // bit 4, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x10U);
                     return 8;
                 case 0x61: // bit 4, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x10U);
                     return 8;
                 case 0x62: // bit 4, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x10U);
                     return 8;
                 case 0x63: // bit 4, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x10U);
                     return 8;
                 case 0x64: // bit 4, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x10U);
                     return 8;
                 case 0x65: // bit 4, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x10U);
                     return 8;
                 case 0x66: // bit 4, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x10U);
                     return 12;
                 case 0x67: // bit 4, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x10);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x10U);
                     return 8;
                 case 0x68: // bit 5, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x20U);
                     return 8;
                 case 0x69: // bit 5, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x20U);
                     return 8;
                 case 0x6a: // bit 5, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x20U);
                     return 8;
                 case 0x6b: // bit 5, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x20U);
                     return 8;
                 case 0x6c: // bit 5, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x20U);
                     return 8;
                 case 0x6d: // bit 5, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x20U);
                     return 8;
                 case 0x6e: // bit 5, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x20U);
                     return 12;
                 case 0x6f: // bit 5, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x20);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x20U);
                     return 8;
                 case 0x70: // bit 6, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x40U);
                     return 8;
                 case 0x71: // bit 6, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x40U);
                     return 8;
                 case 0x72: // bit 6, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x40U);
                     return 8;
                 case 0x73: // bit 6, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x40U);
                     return 8;
                 case 0x74: // bit 6, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x40U);
                     return 8;
                 case 0x75: // bit 6, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x40U);
                     return 8;
                 case 0x76: // bit 6, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x40U);
                     return 12;
                 case 0x77: // bit 6, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x40);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x40U);
                     return 8;
                 case 0x78: // bit 7, B
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuB & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuB & 0x80U);
                     return 8;
                 case 0x79: // bit 7, C
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuC & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuC & 0x80U);
                     return 8;
                 case 0x7a: // bit 7, D
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuD & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuD & 0x80U);
                     return 8;
                 case 0x7b: // bit 7, E
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuE & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuE & 0x80U);
                     return 8;
                 case 0x7c: // bit 7, H
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuH & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuH & 0x80U);
                     return 8;
                 case 0x7d: // bit 7, L
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuL & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuL & 0x80U);
                     return 8;
                 case 0x7e: // bit 7, (HL)
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(R8_HL() & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(R8_HL() & 0x80U);
                     return 12;
                 case 0x7f: // bit 7, A
-                    cpuF &= 0x30;
-                    cpuF |= 0x20;
-                    SETZ_ON_ZERO(cpuA & 0x80);
+                    cpuF &= 0x30U;
+                    cpuF |= 0x20U;
+                    SETZ_ON_ZERO(cpuA & 0x80U);
                     return 8;
                 case 0x80: // res 0, B
-                    cpuB &= 0xfe;
+                    cpuB &= 0xfeU;
                     return 8;
                 case 0x81: // res 0, C
-                    cpuC &= 0xfe;
+                    cpuC &= 0xfeU;
                     return 8;
                 case 0x82: // res 0, D
-                    cpuD &= 0xfe;
+                    cpuD &= 0xfeU;
                     return 8;
                 case 0x83: // res 0, E
-                    cpuE &= 0xfe;
+                    cpuE &= 0xfeU;
                     return 8;
                 case 0x84: // res 0, H
-                    cpuH &= 0xfe;
+                    cpuH &= 0xfeU;
                     return 8;
                 case 0x85: // res 0, L
-                    cpuL &= 0xfe;
+                    cpuL &= 0xfeU;
                     return 8;
                 case 0x86: // res 0, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xfe);
+                    write8(tempAddr, read8(tempAddr) & 0xfeU);
                 }
                     return 16;
                 case 0x87: // res 0, A
-                    cpuA &= 0xfe;
+                    cpuA &= 0xfeU;
                     return 8;
                 case 0x88: // res 1, B
-                    cpuB &= 0xfd;
+                    cpuB &= 0xfdU;
                     return 8;
                 case 0x89: // res 1, C
-                    cpuC &= 0xfd;
+                    cpuC &= 0xfdU;
                     return 8;
                 case 0x8a: // res 1, D
-                    cpuD &= 0xfd;
+                    cpuD &= 0xfdU;
                     return 8;
                 case 0x8b: // res 1, E
-                    cpuE &= 0xfd;
+                    cpuE &= 0xfdU;
                     return 8;
                 case 0x8c: // res 1, H
-                    cpuH &= 0xfd;
+                    cpuH &= 0xfdU;
                     return 8;
                 case 0x8d: // res 1, L
-                    cpuL &= 0xfd;
+                    cpuL &= 0xfdU;
                     return 8;
                 case 0x8e: // res 1, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xfd);
+                    write8(tempAddr, read8(tempAddr) & 0xfdU);
                 }
                     return 16;
                 case 0x8f: // res 1, A
-                    cpuA &= 0xfd;
+                    cpuA &= 0xfdU;
                     return 8;
                 case 0x90: // res 2, B
-                    cpuB &= 0xfb;
+                    cpuB &= 0xfbU;
                     return 8;
                 case 0x91: // res 2, C
-                    cpuC &= 0xfb;
+                    cpuC &= 0xfbU;
                     return 8;
                 case 0x92: // res 2, D
-                    cpuD &= 0xfb;
+                    cpuD &= 0xfbU;
                     return 8;
                 case 0x93: // res 2, E
-                    cpuE &= 0xfb;
+                    cpuE &= 0xfbU;
                     return 8;
                 case 0x94: // res 2, H
-                    cpuH &= 0xfb;
+                    cpuH &= 0xfbU;
                     return 8;
                 case 0x95: // res 2, L
-                    cpuL &= 0xfb;
+                    cpuL &= 0xfbU;
                     return 8;
                 case 0x96: // res 2, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xfb);
+                    write8(tempAddr, read8(tempAddr) & 0xfbU);
                 }
                     return 16;
                 case 0x97: // res 2, A
-                    cpuA &= 0xfb;
+                    cpuA &= 0xfbU;
                     return 8;
                 case 0x98: // res 3, B
-                    cpuB &= 0xf7;
+                    cpuB &= 0xf7U;
                     return 8;
                 case 0x99: // res 3, C
-                    cpuC &= 0xf7;
+                    cpuC &= 0xf7U;
                     return 8;
                 case 0x9a: // res 3, D
-                    cpuD &= 0xf7;
+                    cpuD &= 0xf7U;
                     return 8;
                 case 0x9b: // res 3, E
-                    cpuE &= 0xf7;
+                    cpuE &= 0xf7U;
                     return 8;
                 case 0x9c: // res 3, H
-                    cpuH &= 0xf7;
+                    cpuH &= 0xf7U;
                     return 8;
                 case 0x9d: // res 3, L
-                    cpuL &= 0xf7;
+                    cpuL &= 0xf7U;
                     return 8;
                 case 0x9e: // res 3, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xf7);
+                    write8(tempAddr, read8(tempAddr) & 0xf7U);
                 }
                     return 16;
                 case 0x9f: // res 3, A
-                    cpuA &= 0xf7;
+                    cpuA &= 0xf7U;
                     return 8;
                 case 0xa0: // res 4, B
-                    cpuB &= 0xef;
+                    cpuB &= 0xefU;
                     return 8;
                 case 0xa1: // res 4, C
-                    cpuC &= 0xef;
+                    cpuC &= 0xefU;
                     return 8;
                 case 0xa2: // res 4, D
-                    cpuD &= 0xef;
+                    cpuD &= 0xefU;
                     return 8;
                 case 0xa3: // res 4, E
-                    cpuE &= 0xef;
+                    cpuE &= 0xefU;
                     return 8;
                 case 0xa4: // res 4, H
-                    cpuH &= 0xef;
+                    cpuH &= 0xefU;
                     return 8;
                 case 0xa5: // res 4, L
-                    cpuL &= 0xef;
+                    cpuL &= 0xefU;
                     return 8;
                 case 0xa6: // res 4, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xef);
+                    write8(tempAddr, read8(tempAddr) & 0xefU);
                 }
                     return 16;
                 case 0xa7: // res 4, A
-                    cpuA &= 0xef;
+                    cpuA &= 0xefU;
                     return 8;
                 case 0xa8: // res 5, B
-                    cpuB &= 0xdf;
+                    cpuB &= 0xdfU;
                     return 8;
                 case 0xa9: // res 5, C
-                    cpuC &= 0xdf;
+                    cpuC &= 0xdfU;
                     return 8;
                 case 0xaa: // res 5, D
-                    cpuD &= 0xdf;
+                    cpuD &= 0xdfU;
                     return 8;
                 case 0xab: // res 5, E
-                    cpuE &= 0xdf;
+                    cpuE &= 0xdfU;
                     return 8;
                 case 0xac: // res 5, H
-                    cpuH &= 0xdf;
+                    cpuH &= 0xdfU;
                     return 8;
                 case 0xad: // res 5, L
-                    cpuL &= 0xdf;
+                    cpuL &= 0xdfU;
                     return 8;
                 case 0xae: // res 5, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xdf);
+                    write8(tempAddr, read8(tempAddr) & 0xdfU);
                 }
                     return 16;
                 case 0xaf: // res 5, A
-                    cpuA &= 0xdf;
+                    cpuA &= 0xdfU;
                     return 8;
                 case 0xb0: // res 6, B
-                    cpuB &= 0xbf;
+                    cpuB &= 0xbfU;
                     return 8;
                 case 0xb1: // res 6, C
-                    cpuC &= 0xbf;
+                    cpuC &= 0xbfU;
                     return 8;
                 case 0xb2: // res 6, D
-                    cpuD &= 0xbf;
+                    cpuD &= 0xbfU;
                     return 8;
                 case 0xb3: // res 6, E
-                    cpuE &= 0xbf;
+                    cpuE &= 0xbfU;
                     return 8;
                 case 0xb4: // res 6, H
-                    cpuH &= 0xbf;
+                    cpuH &= 0xbfU;
                     return 8;
                 case 0xb5: // res 6, L
-                    cpuL &= 0xbf;
+                    cpuL &= 0xbfU;
                     return 8;
                 case 0xb6: // res 6, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0xbf);
+                    write8(tempAddr, read8(tempAddr) & 0xbfU);
                 }
                     return 16;
                 case 0xb7: // res 6, A
-                    cpuA &= 0xbf;
+                    cpuA &= 0xbfU;
                     return 8;
                 case 0xb8: // res 7, B
-                    cpuB &= 0x7f;
+                    cpuB &= 0x7fU;
                     return 8;
                 case 0xb9: // res 7, C
-                    cpuC &= 0x7f;
+                    cpuC &= 0x7fU;
                     return 8;
                 case 0xba: // res 7, D
-                    cpuD &= 0x7f;
+                    cpuD &= 0x7fU;
                     return 8;
                 case 0xbb: // res 7, E
-                    cpuE &= 0x7f;
+                    cpuE &= 0x7fU;
                     return 8;
                 case 0xbc: // res 7, H
-                    cpuH &= 0x7f;
+                    cpuH &= 0x7fU;
                     return 8;
                 case 0xbd: // res 7, L
-                    cpuL &= 0x7f;
+                    cpuL &= 0x7fU;
                     return 8;
                 case 0xbe: // res 7, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) & 0x7f);
+                    write8(tempAddr, read8(tempAddr) & 0x7fU);;
                 }
                     return 16;
                 case 0xbf: // res 7, A
-                    cpuA &= 0x7f;
+                    cpuA &= 0x7fU;
                     return 8;
                 case 0xc0: // set 0, B
-                    cpuB |= 0x01;
+                    cpuB |= 0x01U;
                     return 8;
                 case 0xc1: // set 0, C
-                    cpuC |= 0x01;
+                    cpuC |= 0x01U;
                     return 8;
                 case 0xc2: // set 0, D
-                    cpuD |= 0x01;
+                    cpuD |= 0x01U;
                     return 8;
                 case 0xc3: // set 0, E
-                    cpuE |= 0x01;
+                    cpuE |= 0x01U;
                     return 8;
                 case 0xc4: // set 0, H
-                    cpuH |= 0x01;
+                    cpuH |= 0x01U;
                     return 8;
                 case 0xc5: // set 0, L
-                    cpuL |= 0x01;
+                    cpuL |= 0x01U;
                     return 8;
                 case 0xc6: // set 0, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x01);
+                    write8(tempAddr, read8(tempAddr) | 0x01U);
                 }
                     return 16;
                 case 0xc7: // set 0, A
-                    cpuA |= 0x01;
+                    cpuA |= 0x01U;
                     return 8;
                 case 0xc8: // set 1, B
-                    cpuB |= 0x02;
+                    cpuB |= 0x02U;
                     return 8;
                 case 0xc9: // set 1, C
-                    cpuC |= 0x02;
+                    cpuC |= 0x02U;
                     return 8;
                 case 0xca: // set 1, D
-                    cpuD |= 0x02;
+                    cpuD |= 0x02U;
                     return 8;
                 case 0xcb: // set 1, E
-                    cpuE |= 0x02;
+                    cpuE |= 0x02U;
                     return 8;
                 case 0xcc: // set 1, H
-                    cpuH |= 0x02;
+                    cpuH |= 0x02U;
                     return 8;
                 case 0xcd: // set 1, L
-                    cpuL |= 0x02;
+                    cpuL |= 0x02U;
                     return 8;
                 case 0xce: // set 1, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x02);
+                    write8(tempAddr, read8(tempAddr) | 0x02U);
                 }
                     return 16;
                 case 0xcf: // set 1, A
-                    cpuA |= 0x02;
+                    cpuA |= 0x02U;
                     return 8;
                 case 0xd0: // set 2, B
-                    cpuB |= 0x04;
+                    cpuB |= 0x04U;
                     return 8;
                 case 0xd1: // set 2, C
-                    cpuC |= 0x04;
+                    cpuC |= 0x04U;
                     return 8;
                 case 0xd2: // set 2, D
-                    cpuD |= 0x04;
+                    cpuD |= 0x04U;
                     return 8;
                 case 0xd3: // set 2, E
-                    cpuE |= 0x04;
+                    cpuE |= 0x04U;
                     return 8;
                 case 0xd4: // set 2, H
-                    cpuH |= 0x04;
+                    cpuH |= 0x04U;
                     return 8;
                 case 0xd5: // set 2, L
-                    cpuL |= 0x04;
+                    cpuL |= 0x04U;
                     return 8;
                 case 0xd6: // set 2, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x04);
+                    write8(tempAddr, read8(tempAddr) | 0x04U);
                 }
                     return 16;
                 case 0xd7: // set 2, A
-                    cpuA |= 0x04;
+                    cpuA |= 0x04U;
                     return 8;
                 case 0xd8: // set 3, B
-                    cpuB |= 0x08;
+                    cpuB |= 0x08U;
                     return 8;
                 case 0xd9: // set 3, C
-                    cpuC |= 0x08;
+                    cpuC |= 0x08U;
                     return 8;
                 case 0xda: // set 3, D
-                    cpuD |= 0x08;
+                    cpuD |= 0x08U;
                     return 8;
                 case 0xdb: // set 3, E
-                    cpuE |= 0x08;
+                    cpuE |= 0x08U;
                     return 8;
                 case 0xdc: // set 3, H
-                    cpuH |= 0x08;
+                    cpuH |= 0x08U;
                     return 8;
                 case 0xdd: // set 3, L
-                    cpuL |= 0x08;
+                    cpuL |= 0x08U;
                     return 8;
                 case 0xde: // set 3, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x08);
+                    write8(tempAddr, read8(tempAddr) | 0x08U);
                 }
                     return 16;
                 case 0xdf: // set 3, A
-                    cpuA |= 0x08;
+                    cpuA |= 0x08U;
                     return 8;
                 case 0xe0: // set 4, B
-                    cpuB |= 0x10;
+                    cpuB |= 0x10U;
                     return 8;
                 case 0xe1: // set 4, C
-                    cpuC |= 0x10;
+                    cpuC |= 0x10U;
                     return 8;
                 case 0xe2: // set 4, D
-                    cpuD |= 0x10;
+                    cpuD |= 0x10U;
                     return 8;
                 case 0xe3: // set 4, E
-                    cpuE |= 0x10;
+                    cpuE |= 0x10U;
                     return 8;
                 case 0xe4: // set 4, H
-                    cpuH |= 0x10;
+                    cpuH |= 0x10U;
                     return 8;
                 case 0xe5: // set 4, L
-                    cpuL |= 0x10;
+                    cpuL |= 0x10U;
                     return 8;
                 case 0xe6: // set 4, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x10);
+                    write8(tempAddr, read8(tempAddr) | 0x10U);
                 }
                     return 16;
                 case 0xe7: // set 4, A
-                    cpuA |= 0x10;
+                    cpuA |= 0x10U;
                     return 8;
                 case 0xe8: // set 5, B
-                    cpuB |= 0x20;
+                    cpuB |= 0x20U;
                     return 8;
                 case 0xe9: // set 5, C
-                    cpuC |= 0x20;
+                    cpuC |= 0x20U;
                     return 8;
                 case 0xea: // set 5, D
-                    cpuD |= 0x20;
+                    cpuD |= 0x20U;
                     return 8;
                 case 0xeb: // set 5, E
-                    cpuE |= 0x20;
+                    cpuE |= 0x20U;
                     return 8;
                 case 0xec: // set 5, H
-                    cpuH |= 0x20;
+                    cpuH |= 0x20U;
                     return 8;
                 case 0xed: // set 5, L
-                    cpuL |= 0x20;
+                    cpuL |= 0x20U;
                     return 8;
                 case 0xee: // set 5, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x20);
+                    write8(tempAddr, read8(tempAddr) | 0x20U);
                 }
                     return 16;
                 case 0xef: // set 5, A
-                    cpuA |= 0x20;
+                    cpuA |= 0x20U;
                     return 8;
                 case 0xf0: // set 6, B
-                    cpuB |= 0x40;
+                    cpuB |= 0x40U;
                     return 8;
                 case 0xf1: // set 6, C
-                    cpuC |= 0x40;
+                    cpuC |= 0x40U;
                     return 8;
                 case 0xf2: // set 6, D
-                    cpuD |= 0x40;
+                    cpuD |= 0x40U;
                     return 8;
                 case 0xf3: // set 6, E
-                    cpuE |= 0x40;
+                    cpuE |= 0x40U;
                     return 8;
                 case 0xf4: // set 6, H
-                    cpuH |= 0x40;
+                    cpuH |= 0x40U;
                     return 8;
                 case 0xf5: // set 6, L
-                    cpuL |= 0x40;
+                    cpuL |= 0x40U;
                     return 8;
                 case 0xf6: // set 6, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x40);
+                    write8(tempAddr, read8(tempAddr) | 0x40U);
                 }
                     return 16;
                 case 0xf7: // set 6, A
-                    cpuA |= 0x40;
+                    cpuA |= 0x40U;
                     return 8;
                 case 0xf8: // set 7, B
-                    cpuB |= 0x80;
+                    cpuB |= 0x80U;
                     return 8;
                 case 0xf9: // set 7, C
-                    cpuC |= 0x80;
+                    cpuC |= 0x80U;
                     return 8;
                 case 0xfa: // set 7, D
-                    cpuD |= 0x80;
+                    cpuD |= 0x80U;
                     return 8;
                 case 0xfb: // set 7, E
-                    cpuE |= 0x80;
+                    cpuE |= 0x80U;
                     return 8;
                 case 0xfc: // set 7, H
-                    cpuH |= 0x80;
+                    cpuH |= 0x80U;
                     return 8;
                 case 0xfd: // set 7, L
-                    cpuL |= 0x80;
+                    cpuL |= 0x80U;
                     return 8;
                 case 0xfe: // set 7, (HL)
                 {
                     unsigned int tempAddr = HL();
-                    write8(tempAddr, read8(tempAddr) | 0x80);
+                    write8(tempAddr, read8(tempAddr) | 0x80U);
                 }
                     return 16;
                 case 0xff: // set 7, A
-                    cpuA |= 0x80;
+                    cpuA |= 0x80U;
                     return 8;
             }
         case 0xcc: // call Z, nn
-            if ((cpuF & 0x80) != 0x00)
+            if ((cpuF & 0x80U) != 0x00)
             {
-                unsigned char msb = read8(cpuPc + 1);
-                unsigned char lsb = read8(cpuPc + 2);
+                uint8_t msb = read8(cpuPc + 1);
+                uint8_t lsb = read8(cpuPc + 2);
 #ifdef _WIN32
                 if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
-                    debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                    debugger.breakLastCallTo = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
 #endif
                 cpuSp -= 2;
                 cpuPc += 3;
-                write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 24;
             }
             else
@@ -5672,25 +5625,25 @@ unsigned int Gbc::performOp()
             }
         case 0xcd: // call nn
         {
-            unsigned char msb = read8(cpuPc + 1);
-            unsigned char lsb = read8(cpuPc + 2);
+            uint8_t msb = read8(cpuPc + 1);
+            uint8_t lsb = read8(cpuPc + 2);
 #ifdef _WIN32
             if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
-                debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                debugger.breakLastCallTo = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 debugger.breakLastCallReturned = 0;
             }
 #endif
             cpuSp -= 2;
             cpuPc += 3;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
-            cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
+            cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
         }
             return 24;
         case 0xce: // adc A, n
         {
-            unsigned char tempByte = read8(cpuPc + 1);
-            unsigned char tempByte2 = cpuF & 0x10;
+            uint8_t tempByte = read8(cpuPc + 1);
+            uint8_t tempByte2 = cpuF & 0x10U;
             cpuF = 0x00;
             if (tempByte2 != 0x00)
             {
@@ -5700,8 +5653,8 @@ unsigned int Gbc::performOp()
             cpuA += tempByte;
             SETZ_ON_ZERO(cpuA);
             SETC_ON_COND(cpuA < tempByte);
-            tempByte = tempByte & 0x0f;
-            tempByte2 = cpuA & 0x0f;
+            tempByte = tempByte & 0x0fU;
+            tempByte2 = cpuA & 0x0fU;
             SETH_ON_COND(tempByte > tempByte2);
         }
             cpuPc += 2;
@@ -5716,11 +5669,11 @@ unsigned int Gbc::performOp()
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0008;
             return 16;
         case 0xd0: // ret NC
-            if ((cpuF & 0x10) != 0x00) {
+            if ((cpuF & 0x10U) != 0x00) {
                 cpuPc++;
                 return 8;
             } else {
@@ -5729,10 +5682,10 @@ unsigned int Gbc::performOp()
                     debugger.breakLastCallReturned = 1;
                 }
 #endif
-                unsigned char msb, lsb;
+                uint8_t msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 20;
             }
         case 0xd1: // pop DE
@@ -5741,14 +5694,14 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 12;
         case 0xd2: // j NC, nn
-            if ((cpuF & 0x10) != 0x00)
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuPc += 3;
                 return 12;
             }
             else
             {
-                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1);
+                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1);
                 return 16;
             }
         case 0xd3: // REMOVED INSTRUCTION
@@ -5756,26 +5709,26 @@ unsigned int Gbc::performOp()
             throwException(instr);
             return clocksAcc;
         case 0xd4: // call NC, nn
-            if ((cpuF & 0x10) != 0x00)
+            if ((cpuF & 0x10U) != 0x00)
             {
                 cpuPc += 3;
                 return 12;
             }
             else
             {
-                unsigned char msb = read8(cpuPc + 1);
-                unsigned char lsb = read8(cpuPc + 2);
+                uint8_t msb = read8(cpuPc + 1);
+                uint8_t lsb = read8(cpuPc + 2);
 #ifdef _WIN32
                 if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
-                    debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                    debugger.breakLastCallTo = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
 #endif
                 cpuSp -= 2;
                 cpuPc += 3;
-                write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 24;
             }
         case 0xd5: // push DE
@@ -5785,10 +5738,10 @@ unsigned int Gbc::performOp()
             return 16;
         case 0xd6: // sub A, n
         {
-            unsigned char msb = read8(cpuPc + 1);
+            uint8_t msb = read8(cpuPc + 1);
             cpuF = 0x40;
             SETC_ON_COND(msb > cpuA);
-            SETH_ON_COND((msb & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((msb & 0x0fU) > (cpuA & 0x0fU));
             cpuA -= msb;
             if (cpuA == 0x00)
             {
@@ -5801,26 +5754,26 @@ unsigned int Gbc::performOp()
 #ifdef _WIN32
             if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
-                debugger.breakLastCallTo = 0x10;
+                debugger.breakLastCallTo = 0x10U;
                 debugger.breakLastCallReturned = 0;
             }
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0010;
             return 16;
         case 0xd8: // ret C
-            if ((cpuF & 0x10) != 0x00) {
+            if ((cpuF & 0x10U) != 0x00) {
 #ifdef _WIN32
                 if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallReturned = 1;
                 }
 #endif
-                unsigned char msb, lsb;
+                uint8_t msb, lsb;
                 read16(cpuSp, &msb, &lsb);
                 cpuSp += 2;
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 20;
             } else {
                 cpuPc++;
@@ -5833,17 +5786,17 @@ unsigned int Gbc::performOp()
                 debugger.breakLastCallReturned = 1;
             }
 #endif
-            unsigned char msb, lsb;
+            uint8_t msb, lsb;
             read16(cpuSp, &msb, &lsb);
             cpuSp += 2;
-            cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+            cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
             cpuIme = true;
         }
             return 16;
         case 0xda: // j C, nn (abs jump if carry)
-            if ((cpuF & 0x10) != 0x00)
+            if ((cpuF & 0x10U) != 0x00)
             {
-                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1);
+                cpuPc = ((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1);
                 return 16;
             }
             else
@@ -5856,20 +5809,20 @@ unsigned int Gbc::performOp()
             throwException(instr);
             return clocksAcc;
         case 0xdc: // call C, nn
-            if ((cpuF & 0x10) != 0x00) {
-                unsigned char msb = read8(cpuPc + 1);
-                unsigned char lsb = read8(cpuPc + 2);
+            if ((cpuF & 0x10U) != 0x00) {
+                uint8_t msb = read8(cpuPc + 1);
+                uint8_t lsb = read8(cpuPc + 2);
 #ifdef _WIN32
                 if (debugger.totalBreakEnables > 0) {
                     debugger.breakLastCallAt = cpuPc;
-                    debugger.breakLastCallTo = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                    debugger.breakLastCallTo = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                     debugger.breakLastCallReturned = 0;
                 }
 #endif
                 cpuSp -= 2;
                 cpuPc += 3;
-                write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
-                cpuPc = ((unsigned int)lsb << 8) + (unsigned int)msb;
+                write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
+                cpuPc = ((unsigned int)lsb << 8U) + (unsigned int)msb;
                 return 24;
             } else {
                 cpuPc += 3;
@@ -5881,22 +5834,22 @@ unsigned int Gbc::performOp()
             return clocksAcc;
         case 0xde: // sbc A, n
         {
-            unsigned char tempByte = cpuA;
-            unsigned char tempByte2 = cpuF & 0x10;
+            uint8_t tempByte = cpuA;
+            uint8_t tempByte2 = cpuF & 0x10U;
             cpuF = 0x40;
             cpuA -= read8(cpuPc + 1);
             if (tempByte2 != 0x00)
             {
                 if (cpuA == 0x00)
                 {
-                    cpuF |= 0x30;
+                    cpuF |= 0x30U;
                 }
                 cpuA--;
             }
             SETC_ON_COND(cpuA > tempByte);
             SETZ_ON_ZERO(cpuA);
-            tempByte2 = tempByte & 0x0f;
-            tempByte = cpuA & 0x0f;
+            tempByte2 = tempByte & 0x0fU;
+            tempByte = cpuA & 0x0fU;
             SETH_ON_COND(tempByte > tempByte2);
         }
             cpuPc += 2;
@@ -5911,7 +5864,7 @@ unsigned int Gbc::performOp()
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0018;
             return 16;
         case 0xe0: // ldh (n), A (load to IO port n - ff00 + n)
@@ -5942,7 +5895,7 @@ unsigned int Gbc::performOp()
             return 16;
         case 0xe6: // and n
             cpuA = cpuA & read8(cpuPc + 1);
-            cpuF = 0x20;
+            cpuF = 0x20U;
             SETZ_ON_ZERO(cpuA);
             cpuPc += 2;
             return 8;
@@ -5950,32 +5903,32 @@ unsigned int Gbc::performOp()
 #ifdef _WIN32
             if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
-                debugger.breakLastCallTo = 0x20;
+                debugger.breakLastCallTo = 0x20U;
                 debugger.breakLastCallReturned = 0;
             }
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0020;
             return 16;
         case 0xe8: // add SP, d
         {
-            unsigned char msb = read8(cpuPc + 1);
+            uint8_t msb = read8(cpuPc + 1);
             cpuF = 0x00;
             if (msb >= 0x80)
             {
                 unsigned int tempAddr = 256 - (unsigned int)msb;
                 cpuSp -= tempAddr;
-                SETC_ON_COND((cpuSp & 0x0000ffff) > (tempAddr & 0x0000ffff));
-                SETH_ON_COND((cpuSp & 0x000000ff) > (tempAddr & 0x000000ff));
+                SETC_ON_COND((cpuSp & 0x0000ffffU) > (tempAddr & 0x0000ffffU));
+                SETH_ON_COND((cpuSp & 0x000000ffU) > (tempAddr & 0x000000ffU));
             }
             else
             {
-                unsigned int tempAddr = (unsigned int)msb;
+                auto tempAddr = (unsigned int)msb;
                 cpuSp += tempAddr;
-                SETC_ON_COND((cpuSp & 0x0000ffff) < (tempAddr & 0x0000ffff));
-                SETH_ON_COND((cpuSp & 0x000000ff) < (tempAddr & 0x000000ff));
+                SETC_ON_COND((cpuSp & 0x0000ffffU) < (tempAddr & 0x0000ffffU));
+                SETH_ON_COND((cpuSp & 0x000000ffU) < (tempAddr & 0x000000ffU));
             }
         }
             cpuPc += 2;
@@ -5984,7 +5937,7 @@ unsigned int Gbc::performOp()
             cpuPc = HL();
             return 4;
         case 0xea: // ld (nn), A
-            write8(((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1), cpuA);
+            write8(((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1), cpuA);
             cpuPc += 3;
             return 16;
         case 0xeb: // REMOVED INSTRUCTION
@@ -6015,7 +5968,7 @@ unsigned int Gbc::performOp()
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0028;
             return 16;
         case 0xf0: // ldh A, (n)
@@ -6024,7 +5977,7 @@ unsigned int Gbc::performOp()
             return 12;
         case 0xf1: // pop AF
             read16(cpuSp, &cpuF, &cpuA);
-            cpuF &= 0xf0;
+            cpuF &= 0xf0U;
             cpuSp += 2;
             cpuPc++;
             return 12;
@@ -6055,34 +6008,34 @@ unsigned int Gbc::performOp()
 #ifdef _WIN32
             if (debugger.totalBreakEnables > 0) {
                 debugger.breakLastCallAt = cpuPc;
-                debugger.breakLastCallTo = 0x30;
+                debugger.breakLastCallTo = 0x30U;
                 debugger.breakLastCallReturned = 0;
             }
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0030;
             return 16;
         case 0xf8: // ld HL, SP+d
         {
-            unsigned char msb = read8(cpuPc + 1);
+            uint8_t msb = read8(cpuPc + 1);
             cpuF = 0x00;
             unsigned int tempAddr = cpuSp;
             if (msb >= 0x80)
             {
                 tempAddr -= 256 - (unsigned int)msb;
                 SETC_ON_COND(tempAddr > cpuSp);
-                SETH_ON_COND((tempAddr & 0x00ffffff) > (cpuSp & 0x00ffffff));
+                SETH_ON_COND((tempAddr & 0x00ffffffU) > (cpuSp & 0x00ffffffU));
             }
             else
             {
                 tempAddr += (unsigned int)msb;
                 SETC_ON_COND(cpuSp > tempAddr);
-                SETH_ON_COND((cpuSp & 0x00ffffff) > (tempAddr & 0x00ffffff));
+                SETH_ON_COND((cpuSp & 0x00ffffffU) > (tempAddr & 0x00ffffffU));
             }
-            cpuH = (unsigned char)(tempAddr >> 8);
-            cpuL = (unsigned char)(tempAddr & 0xff);
+            cpuH = (uint8_t)(tempAddr >> 8U);
+            cpuL = (uint8_t)(tempAddr & 0xffU);
         }
             cpuPc += 2;
             return 12;
@@ -6091,7 +6044,7 @@ unsigned int Gbc::performOp()
             cpuPc++;
             return 8;
         case 0xfa: // ld A, (nn)
-            cpuA = read8(((unsigned int)read8(cpuPc + 2) << 8) + (unsigned int)read8(cpuPc + 1));
+            cpuA = read8(((unsigned int)read8(cpuPc + 2) << 8U) + (unsigned int)read8(cpuPc + 1));
             cpuPc += 3;
             return 16;
         case 0xfb: // ei
@@ -6108,9 +6061,9 @@ unsigned int Gbc::performOp()
             return clocksAcc;
         case 0xfe: // cp n
         {
-            unsigned char msb = read8(cpuPc + 1);
+            uint8_t msb = read8(cpuPc + 1);
             cpuF = 0x40;
-            SETH_ON_COND((msb & 0x0f) > (cpuA & 0x0f));
+            SETH_ON_COND((msb & 0x0fU) > (cpuA & 0x0fU));
             SETC_ON_COND(msb > cpuA);
             SETZ_ON_COND(cpuA == msb);
         }
@@ -6126,7 +6079,7 @@ unsigned int Gbc::performOp()
 #endif
             cpuSp -= 2;
             cpuPc++;
-            write16(cpuSp, (unsigned char)(cpuPc & 0xff), (unsigned char)(cpuPc >> 8));
+            write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
             cpuPc = 0x0038;
             return 16;
     }

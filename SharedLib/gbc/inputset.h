@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
+
 class InputSet {
 public:
-    int keyBut, keyDir;
+    uint8_t keyBut, keyDir;
     void clear();
     void pressRight();
     void pressLeft();
