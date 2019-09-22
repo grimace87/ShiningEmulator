@@ -48,7 +48,7 @@ Gbc* DebugWindowModule::gbc = nullptr;
 
 DebugWindowModule::DebugWindowModule() noexcept {
 	// Reset public instance variables
-    breakCode = 0;
+    breakCode = BreakCode::NONE;
     totalBreakEnables = 0;
     breakOnSramEnable = 0;
     breakOnSramDisable = 0;
@@ -63,6 +63,16 @@ DebugWindowModule::DebugWindowModule() noexcept {
     breakWriteByte = 0;
     breakReadAddr = 0x0000;
     breakReadByte = 0;
+}
+
+void DebugWindowModule::updateUiOnPause() {
+    if (gbc->isPaused) {
+        SendMessage(pauseButtonComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Unpause Emulator");
+        SendMessage(debugStatusComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Emulation paused");
+    } else {
+        SendMessage(pauseButtonComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Pause Emulator");
+        SendMessage(debugStatusComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Running");
+    }
 }
 
 ATOM DebugWindowModule::registerWindowClass(HINSTANCE instance) {
@@ -80,14 +90,14 @@ ATOM DebugWindowModule::registerWindowClass(HINSTANCE instance) {
 	return RegisterClass(&wcDebug);
 }
 
-void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc) {
+void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbcInstance) {
 
     if (debugWindow) {
         return;
     }
 
 	// Connect GBC instance
-	this->gbc = gbc;
+	DebugWindowModule::gbc = gbcInstance;
 
 	// Create window class if need be
 	if (!classRegistered) {
@@ -267,6 +277,16 @@ void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc
     SendMessage(debugTextComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Awaiting breakpoint for info display");
 }
 
+void DebugWindowModule::setBreakCode(BreakCode code) {
+    if (breakCode != BreakCode::NONE) {
+        return;
+    }
+
+    breakCode = code;
+    gbc->isPaused = true;
+    updateUiOnPause();
+}
+
 /******************
  * Load ROM details
  * into debug window
@@ -287,9 +307,9 @@ void DebugWindowModule::loadROMDetails() {
 	if (gbc->sram.sizeBytes >= 1024) text << (gbc->sram.sizeBytes / 1024) << " KB\n";
 	else text << gbc->sram.sizeBytes << " bytes\n";
 	text << "ROM type: ";
-	if (gbc->romProperties.cgbFlag) text << "Color\n";
-	else if (gbc->romProperties.sgbFlag) text << "Super Gameboy\n";
-	else text << "Standard Gameboy\n";
+	if (gbc->romProperties.cgbFlag) text << "Color game\n";
+	else if (gbc->romProperties.sgbFlag) text << "Super game\n";
+	else text << "Standard game\n";
 	text << "Has battery backup: ";
 	if (gbc->sram.hasBattery) text << "Yes\n";
 	else text << "No\n";
@@ -817,80 +837,64 @@ void DebugWindowModule::decodeBreakReadAddress() {
 ////////////////////////////
 
 LRESULT APIENTRY DebugWindowModule::debugWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
-	case WM_DESTROY:
-		debugger.debugWindow = NULL;
-		return 0;
-	default:
+	if (message == WM_DESTROY) {
+        DebugWindowModule::debugWindow = nullptr;
+        return 0;
+    } else {
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 }
 
 LRESULT APIENTRY DebugWindowModule::pauseButtonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
-	case WM_LBUTTONDOWN:
-		if (debugger.gbc->running) {
-			debugger.gbc->pause();
-			SendMessage(pauseButtonComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Unpause Emulator");
-			SendMessage(debugStatusComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Emulation paused");
-		}
-		else {
-			debugger.gbc->resume();
-			SendMessage(pauseButtonComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Pause Emulator");
-			SendMessage(debugStatusComponent, WM_SETTEXT, (WPARAM)NULL, (LPARAM)L"Running");
-		}
+	if (message == WM_LBUTTONDOWN) {
+        gbc->isPaused = !gbc->isPaused;
+        updateUiOnPause();
 	}
-	return CallWindowProc(pauseButtonDefProc, debugger.pauseButtonComponent, message, wParam, lParam);
+	return CallWindowProc(pauseButtonDefProc, pauseButtonComponent, message, wParam, lParam);
 }
 
 LRESULT APIENTRY DebugWindowModule::refreshButtonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
-	case WM_LBUTTONDOWN:
+	if (message == WM_LBUTTONDOWN) {
 		debugger.loadMemoryDetails(0);
 	}
 	return CallWindowProc(refreshButtonDefProc, refreshButtonComponent, message, wParam, lParam);
 }
 
 LRESULT APIENTRY DebugWindowModule::dropdownWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
-	case WM_COMMAND:
-		if (HIWORD(wParam) == CBN_SELCHANGE)
-			debugger.loadMemoryDetails(1);
-		break;
+	if (message == WM_COMMAND) {
+		if (HIWORD(wParam) == CBN_SELCHANGE) {
+            debugger.loadMemoryDetails(1);
+        }
 	}
 	return CallWindowProc(dropdownDefProc, dropdownBoxComponent, message, wParam, lParam);
 }
 
 LRESULT APIENTRY DebugWindowModule::dropdownBankWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
-	case WM_COMMAND:
-		if (HIWORD(wParam) == CBN_SELCHANGE)
-			debugger.loadMemoryDetails(0);
-		break;
+	if (message == WM_COMMAND) {
+        if (HIWORD(wParam) == CBN_SELCHANGE) {
+            debugger.loadMemoryDetails(0);
+        }
 	}
 	return CallWindowProc(dropdownBankDefProc, dropdownBankComponent, message, wParam, lParam);
 }
 
 LRESULT APIENTRY DebugWindowModule::checkBoxWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (hWnd == breakSramEnableComponent) {
-		switch (message) {
-		case WM_LBUTTONDOWN:
+		if (message == WM_LBUTTONDOWN) {
 			if (SendMessage(hWnd, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED) {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_UNCHECKED, (LPARAM)0);
 				debugger.breakOnSramEnable = 0;
-			}
-			else {
+			} else {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_CHECKED, (LPARAM)0);
 				debugger.breakOnSramEnable = 1;
 			}
 			debugger.totalBreakEnables = debugger.breakOnSramEnable + debugger.breakOnSramDisable + debugger.breakOnPc + debugger.breakOnWrite + debugger.breakOnRead;
-			break;
-		}
-		return CallWindowProc(breakSramEnableDefProc, hWnd, message, wParam, lParam);
-	}
-	else if (hWnd == breakSramDisableComponent) {
-		switch (message) {
-		case WM_LBUTTONDOWN:
+			return 0;
+		} else {
+            return CallWindowProc(breakSramEnableDefProc, hWnd, message, wParam, lParam);
+        }
+	} else if (hWnd == breakSramDisableComponent) {
+		if (message == WM_LBUTTONDOWN) {
 			if (SendMessage(hWnd, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED) {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_UNCHECKED, (LPARAM)0);
 				debugger.breakOnSramDisable = 0;
@@ -900,45 +904,40 @@ LRESULT APIENTRY DebugWindowModule::checkBoxWndProc(HWND hWnd, UINT message, WPA
 				debugger.breakOnSramDisable = 1;
 			}
 			debugger.totalBreakEnables = debugger.breakOnSramEnable + debugger.breakOnSramDisable + debugger.breakOnPc + debugger.breakOnWrite + debugger.breakOnRead;
-			break;
-		}
-		return CallWindowProc(breakSramEnableDefProc, hWnd, message, wParam, lParam);
-	}
-	else if (hWnd == breakPcComponent) {
-		switch (message) {
-		case WM_LBUTTONDOWN:
+            return 0;
+		} else {
+            return CallWindowProc(breakSramEnableDefProc, hWnd, message, wParam, lParam);
+        }
+	} else if (hWnd == breakPcComponent) {
+		if (message == WM_LBUTTONDOWN) {
 			if (SendMessage(hWnd, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED) {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_UNCHECKED, (LPARAM)0);
 				debugger.breakOnPc = 0;
-			}
-			else {
+			} else {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_CHECKED, (LPARAM)0);
 				debugger.breakOnPc = 1;
 			}
 			debugger.totalBreakEnables = debugger.breakOnSramEnable + debugger.breakOnSramDisable + debugger.breakOnPc + debugger.breakOnWrite + debugger.breakOnRead;
-			break;
-		}
-		return CallWindowProc(breakPcDefProc, hWnd, message, wParam, lParam);
-	}
-	else if (hWnd == breakWriteComponent) {
-		switch (message) {
-		case WM_LBUTTONDOWN:
+            return 0;
+		} else {
+            return CallWindowProc(breakPcDefProc, hWnd, message, wParam, lParam);
+        }
+	} else if (hWnd == breakWriteComponent) {
+		if (message == WM_LBUTTONDOWN) {
 			if (SendMessage(hWnd, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED) {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_UNCHECKED, (LPARAM)0);
 				debugger.breakOnWrite = 0;
-			}
-			else {
+			} else {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_CHECKED, (LPARAM)0);
 				debugger.breakOnWrite = 1;
 			}
 			debugger.totalBreakEnables = debugger.breakOnSramEnable + debugger.breakOnSramDisable + debugger.breakOnPc + debugger.breakOnWrite + debugger.breakOnRead;
-			break;
-		}
-		return CallWindowProc(breakWriteDefProc, hWnd, message, wParam, lParam);
-	}
-	else if (hWnd == breakReadComponent) {
-		switch (message) {
-		case WM_LBUTTONDOWN:
+            return 0;
+		} else {
+            return CallWindowProc(breakWriteDefProc, hWnd, message, wParam, lParam);
+        }
+	} else if (hWnd == breakReadComponent) {
+		if (message == WM_LBUTTONDOWN) {
 			if (SendMessage(hWnd, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED) {
 				SendMessage(hWnd, BM_SETCHECK, (WPARAM)BST_UNCHECKED, (LPARAM)0);
 				debugger.breakOnRead = 0;
@@ -948,13 +947,14 @@ LRESULT APIENTRY DebugWindowModule::checkBoxWndProc(HWND hWnd, UINT message, WPA
 				debugger.breakOnRead = 1;
 			}
 			debugger.totalBreakEnables = debugger.breakOnSramEnable + debugger.breakOnSramDisable + debugger.breakOnPc + debugger.breakOnWrite + debugger.breakOnRead;
-			break;
-		}
-		return CallWindowProc(breakReadDefProc, hWnd, message, wParam, lParam);
+            return 0;
+		} else {
+            return CallWindowProc(breakReadDefProc, hWnd, message, wParam, lParam);
+        }
 	}
-	else
-		return 0;
 
+	// Unknown window handle, should never be reached
+    return 0;
 }
 
 LRESULT APIENTRY DebugWindowModule::breakPcAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {

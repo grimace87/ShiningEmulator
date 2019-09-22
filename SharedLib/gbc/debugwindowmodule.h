@@ -67,8 +67,22 @@ class DebugWindowModule {
 	static WNDPROC breakReadDefProc;
 	static WNDPROC breakReadAddrDefProc;
 
+	// Configure UI on pause/unpause
+	static void updateUiOnPause();
+
 public:
-    int breakCode;
+    // Break code - indicates that the emulation has been paused by the debugger,
+    // and the type of the break
+    enum class BreakCode {
+        NONE,
+        ENABLED_SRAM,
+        DISABLED_SRAM,
+        REACHED_ADDRESS,
+        WROTE_TO_ADDRESS,
+        READ_FROM_ADDRESS
+    };
+    BreakCode breakCode;
+
     int totalBreakEnables;
     int breakOnSramEnable;
     int breakOnSramDisable;
@@ -85,7 +99,8 @@ public:
     unsigned int breakReadAddr;
     unsigned int breakReadByte;
     DebugWindowModule() noexcept;
-    void showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc);
+    void showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbcInstance);
+    void setBreakCode(BreakCode code);
     void loadROMDetails();
     void loadMemoryDetails(int statusChanged);
 	void loadBreakDetails();

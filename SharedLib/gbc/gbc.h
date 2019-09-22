@@ -21,7 +21,7 @@ class Gbc {
 
     int execute(int ticks);
     int performOp();
-    static void throwException(uint8_t instruction);
+    void onInvalidInstruction(uint8_t instruction);
 
     uint8_t read8(unsigned int address);
     void read16(unsigned int address, uint8_t* msb, uint8_t* lsb);
@@ -127,7 +127,8 @@ public:
     uint8_t cpuL;
 
     // Public members
-    bool running;
+    bool isRunning;
+    bool isPaused;
     InputSet keys{};
     bool keyStateChanged{};
     int clockMultiply;
@@ -140,6 +141,4 @@ public:
     // Other public functions
     bool loadRom(std::string fileName, const uint8_t* data, int dataLength, AppPlatform& appPlatform);
     void reset();
-	void pause();
-	void resume();
 };

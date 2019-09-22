@@ -48,7 +48,8 @@ Gbc::Gbc() {
     gpuMode = GPU_VBLANK;
 
     // Flag not running and no ROM loaded
-    running = false;
+    isRunning = false;
+    isPaused = false;
     romProperties.valid = false;
     clockMultiply = 2;
     clockDivide = 1;
@@ -86,14 +87,15 @@ Gbc::~Gbc() {
     delete[] sgb.chrPalettes;
 }
 
-void Gbc::throwException(uint8_t instruction) {
+void Gbc::onInvalidInstruction(uint8_t instruction) {
+    isPaused = true;
     //std::string msg = "Illegal operation - " + std::to_string((int)instruction);
     //throw new std::runtime_error(msg);
 }
 
 void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
     static int noClocks = 0;
-    if (running) {
+    if (isRunning && !isPaused) {
         // Determine how many clock cycles to emulate, cap at 1000000 (about a quarter of a second)
         const int adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
         noClocks += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
@@ -371,7 +373,7 @@ bool Gbc::loadRom(std::string fileName, const uint8_t* data, int dataLength, App
 void Gbc::reset() {
     // Make sure a valid ROM is loaded
     if (!romProperties.valid) {
-        running = false;
+        isRunning = false;
         return;
     }
 
@@ -390,7 +392,7 @@ void Gbc::reset() {
     needClear = false;
 
 #ifdef _WIN32
-	debugger.breakCode = 0;
+	debugger.breakCode = DebugWindowModule::BreakCode::NONE;
 #endif
 
     // Resetting IO ports may avoid graphical glitches when switching to a colour game. Clearing VRAM may help too.
@@ -492,15 +494,8 @@ void Gbc::reset() {
     lastLYCompare = 1; // Will prevent LYC causing interrupts immediately
     blankedScreen = false;
 
-    running = true;
-}
-
-void Gbc::pause() {
-	running = false;
-}
-
-void Gbc::resume() {
-	running = true;
+    isRunning = true;
+    isPaused = false;
 }
 
 int Gbc::execute(int ticks) {
@@ -529,8 +524,8 @@ int Gbc::execute(int ticks) {
 
     while (clocksAcc > 0) {
 #ifdef _WIN32
-        if (debugger.breakCode > 0) {
-            running = false;
+        if (debugger.breakCode != DebugWindowModule::BreakCode::NONE) {
+            isPaused = true;
             break;
         }
 #endif
@@ -637,7 +632,7 @@ int Gbc::execute(int ticks) {
 #ifdef _WIN32
         if (debugger.breakOnPc) {
             if (cpuPc == debugger.breakPcAddr) {
-                debugger.breakCode = 3;
+                debugger.setBreakCode(DebugWindowModule::BreakCode::REACHED_ADDRESS);
             }
         }
 #endif
@@ -820,7 +815,7 @@ int Gbc::execute(int ticks) {
                     }
                     break;
                 default: // Error that should never happen:
-                    running = false;
+                    isRunning = false;
                     break;
             }
         }
@@ -853,8 +848,8 @@ uint8_t Gbc::read8(unsigned int address) {
     address &= 0xffffU;
 #ifdef _WIN32
     if (debugger.breakOnRead) {
-        if ((address == debugger.breakReadAddr) && (debugger.breakCode != 5)) {
-            debugger.breakCode = 5;
+        if ((address == debugger.breakReadAddr) && (debugger.breakCode != DebugWindowModule::BreakCode::READ_FROM_ADDRESS)) {
+            debugger.setBreakCode(DebugWindowModule::BreakCode::READ_FROM_ADDRESS);
             debugger.breakReadByte = (unsigned int)read8(address);
         }
     }
@@ -988,7 +983,7 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)byte;
-            debugger.breakCode = 4;
+            debugger.breakCode = DebugWindowModule::BreakCode::WROTE_TO_ADDRESS;
         }
     }
 #endif
@@ -1051,11 +1046,11 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
 #ifdef _WIN32
                     if (sram.enableFlag) {
                         if (debugger.breakOnSramEnable) {
-                            debugger.breakCode = 1;
+                            debugger.breakCode = DebugWindowModule::BreakCode::ENABLED_SRAM;
                         }
                     } else {
                         if (debugger.breakOnSramDisable) {
-                            debugger.breakCode = 2;
+                            debugger.breakCode = DebugWindowModule::BreakCode::DISABLED_SRAM;
                         }
                     }
 #endif
@@ -1192,10 +1187,10 @@ void Gbc::write16(unsigned int address, uint8_t msb, uint8_t lsb) {
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)msb;
-            debugger.breakCode = 4;
+            debugger.breakCode = DebugWindowModule::BreakCode::WROTE_TO_ADDRESS;
         } else if ((address + 1) == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)lsb;
-            debugger.breakCode = 4;
+            debugger.breakCode = DebugWindowModule::BreakCode::WROTE_TO_ADDRESS;
         }
     }
 #endif
@@ -5705,8 +5700,7 @@ int Gbc::performOp() {
                 return 16;
             }
         case 0xd3: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xd4: // call NC, nn
             if ((cpuF & 0x10U) != 0x00)
@@ -5805,8 +5799,7 @@ int Gbc::performOp() {
                 return 12;
             }
         case 0xdb: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xdc: // call C, nn
             if ((cpuF & 0x10U) != 0x00) {
@@ -5829,8 +5822,7 @@ int Gbc::performOp() {
                 return 12;
             }
         case 0xdd: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xde: // sbc A, n
         {
@@ -5881,12 +5873,10 @@ int Gbc::performOp() {
             cpuPc++;
             return 8;
         case 0xe3: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xe4: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xe5: // push HL
             cpuSp -= 2;
@@ -5941,16 +5931,13 @@ int Gbc::performOp() {
             cpuPc += 3;
             return 16;
         case 0xeb: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xec: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xed: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xee: // xor n
             cpuA = cpuA ^ read8(cpuPc + 1);
@@ -5990,8 +5977,7 @@ int Gbc::performOp() {
             cpuPc++;
             return 4;
         case 0xf4: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xf5: // push AF
             cpuSp -= 2;
@@ -6052,12 +6038,10 @@ int Gbc::performOp() {
             cpuIme = true;
             return 4;
         case 0xfc: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xfd: // REMOVED INSTRUCTION
-            running = false;
-            throwException(instr);
+            onInvalidInstruction(instr);
             return clocksAcc;
         case 0xfe: // cp n
         {

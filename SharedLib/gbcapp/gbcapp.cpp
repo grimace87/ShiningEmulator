@@ -241,7 +241,7 @@ void GbcApp::doWork() {
 
 void GbcApp::updateState(uint64_t timeDiffMillis) {
     if (GbcAppState::getCurrentInstance()->appMode == AppMode::PLAYING) {
-        if (gbc.running) {
+        if (gbc.isRunning) {
             gbc.doWork(timeDiffMillis, this->gbcKeys);
         } else {
             GbcAppState::getCurrentInstance()->appMode = AppMode::MAIN_MENU;
