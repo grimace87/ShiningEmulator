@@ -392,7 +392,7 @@ void Gbc::reset() {
     needClear = false;
 
 #ifdef _WIN32
-	debugger.breakCode = DebugWindowModule::BreakCode::NONE;
+	debugger.setBreakCode(DebugWindowModule::BreakCode::NONE);
 #endif
 
     // Resetting IO ports may avoid graphical glitches when switching to a colour game. Clearing VRAM may help too.
@@ -524,7 +524,7 @@ int Gbc::execute(int ticks) {
 
     while (clocksAcc > 0) {
 #ifdef _WIN32
-        if (debugger.breakCode != DebugWindowModule::BreakCode::NONE) {
+        if (debugger.breakCodeIsSet()) {
             isPaused = true;
             break;
         }
@@ -848,7 +848,7 @@ uint8_t Gbc::read8(unsigned int address) {
     address &= 0xffffU;
 #ifdef _WIN32
     if (debugger.breakOnRead) {
-        if ((address == debugger.breakReadAddr) && (debugger.breakCode != DebugWindowModule::BreakCode::READ_FROM_ADDRESS)) {
+        if (address == debugger.breakReadAddr) {
             debugger.setBreakCode(DebugWindowModule::BreakCode::READ_FROM_ADDRESS);
             debugger.breakReadByte = (unsigned int)read8(address);
         }
@@ -983,7 +983,7 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)byte;
-            debugger.breakCode = DebugWindowModule::BreakCode::WROTE_TO_ADDRESS;
+            debugger.setBreakCode(DebugWindowModule::BreakCode::WROTE_TO_ADDRESS);
         }
     }
 #endif
@@ -1046,11 +1046,11 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
 #ifdef _WIN32
                     if (sram.enableFlag) {
                         if (debugger.breakOnSramEnable) {
-                            debugger.breakCode = DebugWindowModule::BreakCode::ENABLED_SRAM;
+                            debugger.setBreakCode(DebugWindowModule::BreakCode::ENABLED_SRAM);
                         }
                     } else {
                         if (debugger.breakOnSramDisable) {
-                            debugger.breakCode = DebugWindowModule::BreakCode::DISABLED_SRAM;
+                            debugger.setBreakCode(DebugWindowModule::BreakCode::DISABLED_SRAM);
                         }
                     }
 #endif
@@ -1187,10 +1187,10 @@ void Gbc::write16(unsigned int address, uint8_t msb, uint8_t lsb) {
     if (debugger.breakOnWrite) {
         if (address == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)msb;
-            debugger.breakCode = DebugWindowModule::BreakCode::WROTE_TO_ADDRESS;
+            debugger.setBreakCode(DebugWindowModule::BreakCode::WROTE_TO_ADDRESS);
         } else if ((address + 1) == debugger.breakWriteAddr) {
             debugger.breakWriteByte = (unsigned int)lsb;
-            debugger.breakCode = DebugWindowModule::BreakCode::WROTE_TO_ADDRESS;
+            debugger.setBreakCode(DebugWindowModule::BreakCode::WROTE_TO_ADDRESS);
         }
     }
 #endif

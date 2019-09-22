@@ -79,9 +79,10 @@ public:
         DISABLED_SRAM,
         REACHED_ADDRESS,
         WROTE_TO_ADDRESS,
-        READ_FROM_ADDRESS
+        READ_FROM_ADDRESS,
+        MANUAL_PAUSE
     };
-    BreakCode breakCode;
+    bool breakCodeIsSet();
 
     int totalBreakEnables;
     int breakOnSramEnable;
@@ -107,6 +108,9 @@ public:
 	void decodeBreakPCAddress();
 	void decodeBreakWriteAddress();
 	void decodeBreakReadAddress();
+
+private:
+    BreakCode breakCode;
 };
 
 #endif

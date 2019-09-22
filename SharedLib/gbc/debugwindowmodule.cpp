@@ -278,13 +278,17 @@ void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc
 }
 
 void DebugWindowModule::setBreakCode(BreakCode code) {
-    if (breakCode != BreakCode::NONE) {
+    if (breakCode == code) {
         return;
     }
 
     breakCode = code;
-    gbc->isPaused = true;
+    gbc->isPaused = breakCode != BreakCode::NONE;
     updateUiOnPause();
+}
+
+bool DebugWindowModule::breakCodeIsSet() {
+    return breakCode != BreakCode::NONE;
 }
 
 /******************
@@ -707,6 +711,7 @@ void DebugWindowModule::loadMemoryDetails(int statusChanged) {
 		if (Insert < 10) text << "   "; else if (Insert < 100) text << "  "; else text << " ";
 		text << "\r\nPC " << gbc->cpuPc;
 		text << "\r\nSP " << gbc->cpuSp;
+		text << "\r\nROM bank " << (gbc->bankOffset / 0x4000U);
 		text << "\r\n\r\nBG color palettes (8x4xRGB):\r\n";
 		for (line = 0; line < 8; line++) {
 			text << " " << line << ": ";
@@ -715,7 +720,7 @@ void DebugWindowModule::loadMemoryDetails(int statusChanged) {
 			text << gbc->cgbBgPalette[line * 4 + 2] << ", ";
 			text << gbc->cgbBgPalette[line * 4 + 3] << "\r\n";
 		}
-		text << "Sprite color palettes (8x4xRGB):\r\n" << gbc->cpuSp;
+		text << "Sprite color palettes (8x4xRGB):\r\n";
 		for (line = 0; line < 8; line++) {
 			text << " " << line << ": ";
 			text << gbc->cgbObjPalette[line * 4 + 0] << ", ";
@@ -847,8 +852,8 @@ LRESULT APIENTRY DebugWindowModule::debugWndProc(HWND hWnd, UINT message, WPARAM
 
 LRESULT APIENTRY DebugWindowModule::pauseButtonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == WM_LBUTTONDOWN) {
-        gbc->isPaused = !gbc->isPaused;
-        updateUiOnPause();
+        BreakCode code = gbc->isPaused ? BreakCode::NONE : BreakCode::MANUAL_PAUSE;
+        debugger.setBreakCode(code);
 	}
 	return CallWindowProc(pauseButtonDefProc, pauseButtonComponent, message, wParam, lParam);
 }
