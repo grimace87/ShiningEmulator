@@ -818,20 +818,25 @@ int Gbc::execute(int ticks) {
                     isRunning = false;
                     break;
             }
-        }
-        else {
-            ioPorts[0x0044] = 0;
-            gpuTimeInMode = 0;
-            gpuMode = GPU_SCAN_OAM;
+        } else {
             if (!blankedScreen) {
                 accessOam = true;
                 accessVram = true;
-
-                ///////////////////////////////////
-                // SIGNAL DRAWING HERE
-                ///////////////////////////////////
-
+                ioPorts[0x0044] = 0;
+                gpuTimeInMode = 0;
+                gpuMode = GPU_SCAN_OAM;
                 blankedScreen = true;
+
+                ////////////////////////////////////////
+                // SIGNAL DRAWING HERE?
+                // Or just clear release pending frames
+                ////////////////////////////////////////
+
+                while (frameManager.frameIsInProgress()) {
+                    uint32_t* frame = frameManager.getInProgressFrameBuffer();
+                    frameManager.freeFrame(frame);
+                }
+
                 startClocksAcc -= clocksAcc;
                 clocksAcc = 0;
                 return startClocksAcc;
@@ -1428,6 +1433,7 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             if (data < 128) {
                 accessVram = true;
                 accessOam = true;
+                blankedScreen = false;
                 ioPorts[0x44] = 0;
                 if (ioPorts[0x40] >= 0x80U) {
                     // Try to clear the screen. Be prepared to wait because frame rate is irrelevant when LCD is disabled.
