@@ -1036,14 +1036,12 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                     return;
                 } else if (address < 0x3000U) {
                     // ROMB0 - lower 8 bits of 9-bit ROM bank
+                    uint32_t maskedByte = byte & romProperties.bankSelectMask;
                     bankOffset &= 0x00400000U;
-                    bankOffset |= (unsigned int)byte * 0x4000U;
+                    bankOffset |= maskedByte * 0x4000U;
                     if (bankOffset == 0) {
                         // Cannot set bank 0 - use default of 1
                         bankOffset = 0x4000U;
-                    }
-                    if (bankOffset >= 0x100000) {
-                        bankOffset = 0x4000;
                     }
                     return;
                 }
@@ -1054,12 +1052,10 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                     if (byte != 0x00U) {
                         bankOffset |= 0x00400000U;
                     }
+                    bankOffset &= (romProperties.bankSelectMask * 0x4000U);
                     if (bankOffset == 0) {
                         // Only exclusion with MBC5 is bank 0
                         bankOffset = 0x00004000U;
-                    }
-                    if (bankOffset >= 0x100000) {
-                        bankOffset = 0x4000;
                     }
                     return;
                 } else if (address < 0x6000U) {
