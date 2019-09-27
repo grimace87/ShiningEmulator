@@ -827,13 +827,8 @@ int Gbc::execute(int ticks) {
                 gpuMode = GPU_SCAN_OAM;
                 blankedScreen = true;
 
-                ////////////////////////////////////////
-                // SIGNAL DRAWING HERE?
-                // Or just clear release pending frames
-                ////////////////////////////////////////
-
+                // Mark any started frames as complete - probably won't do much
                 while (frameManager.frameIsInProgress()) {
-                    uint32_t* frame = frameManager.getInProgressFrameBuffer();
                     frameManager.finishCurrentFrame();
                 }
 
