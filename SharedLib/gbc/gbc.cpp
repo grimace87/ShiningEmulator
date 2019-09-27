@@ -56,7 +56,7 @@ Gbc::Gbc() {
     isRunning = false;
     isPaused = false;
     romProperties.valid = false;
-    clockMultiply = 2;
+    clockMultiply = 1;
     clockDivide = 1;
 
     // Allocate emulated RAM
@@ -102,13 +102,12 @@ int Gbc::runInvalidInstruction(uint8_t instruction) {
 }
 
 void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
-    static int accumulatedClocks = 0;
     if (isRunning && !isPaused) {
         // Determine how many clock cycles to emulate, cap at 1000000 (about a quarter of a second)
         const int adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
-        accumulatedClocks += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
-        if (accumulatedClocks > 1000000) {
-            accumulatedClocks = 1000000;
+        clocksAcc += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
+        if (clocksAcc > 1000000) {
+            clocksAcc = 1000000;
         }
 
         // Copy inputs
@@ -118,8 +117,7 @@ void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
         // Execute this many clock cycles and catch errors
         //try
         //{
-        int consumedClocks = execute(accumulatedClocks);
-        accumulatedClocks -= consumedClocks;
+        executeAccumulatedClocks();
         //}
         //catch (const std::runtime_error& err)
         //{
@@ -508,10 +506,7 @@ void Gbc::reset() {
 
 // Run emulation - accept number of clocks needing to run as an argument,
 // return how many were actually consumed
-int Gbc::execute(const int clocksToRun) {
-    // Increment clocks accumulator
-    clocksAcc += clocksToRun;
-    const int startClocksAcc = clocksAcc;
+void Gbc::executeAccumulatedClocks() {
 
     // Handle key state if required
     if (keyStateChanged) {
@@ -537,104 +532,50 @@ int Gbc::execute(const int clocksToRun) {
         }
 #endif
 
-        // Run appropriate RunOp function, depending on opcode
-        // Pass three bytes in case all are needed, sets PC increment and clocks taken
+        // Run appropriate opcode; returns how many clocks it consumes
         int clocksPassedByInstruction = performOp();
         cpuPc &= 0xffffU; // Clamp PC to 16 bits
         clocksAcc -= clocksPassedByInstruction;
 
         // Check for interrupts:
+        const bool cpuHalted = cpuMode == CPU_HALTED;
         if (cpuIme || cpuHalted) {
-            uint8_t msb = ioPorts[0xff];
-            if (msb) {
-                uint8_t lsb = ioPorts[0x0f];
-                if (lsb) {
-                    uint8_t interruptable = msb & lsb;
-                    if (interruptable & 0x01U) {
-                        // VBlank
-                        if (cpuHalted) {
-                            cpuPc++;
-                        }
-                        cpuHalted = false;
-                        if (!cpuIme) {
-                            goto end_of_int_check;
-                        }
-                        cpuIme = false;
-                        ioPorts[0x0f] &= 0x1eU;
-                        cpuSp -= 2; // Pushing PC onto stack
-                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
-                        cpuPc = 0x0040;
-                        goto end_of_int_check;
-                    }
-                    if (interruptable & 0x02U) {
-                        // LCD Stat
-                        if (cpuHalted) {
-                            cpuPc++;
-                        }
-                        cpuHalted = false;
-                        if (!cpuIme) {
-                            goto end_of_int_check;
-                        }
-                        cpuIme = false;
-                        ioPorts[0x0f] &= 0x1dU;
-                        cpuSp -= 2;
-                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
-                        cpuPc = 0x0048;
-                        goto end_of_int_check;
-                    }
-                    if (interruptable & 0x04U) {
-                        // Timer
-                        if (cpuHalted) {
-                            cpuPc++;
-                        }
-                        cpuHalted = false;
-                        if (!cpuIme) {
-                            goto end_of_int_check;
-                        }
-                        cpuIme = false;
-                        ioPorts[0x0f] &= 0x1bU;
-                        cpuSp -= 2;
-                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
-                        cpuPc = 0x0050;
-                        goto end_of_int_check;
-                    }
-                    if (interruptable & 0x08U) {
-                        // Serial
-                        if (cpuHalted) {
-                            cpuPc++;
-                        }
-                        cpuHalted = false;
-                        if (!cpuIme) {
-                            goto end_of_int_check;
-                        }
-                        cpuIme = false;
-                        ioPorts[0x0f] &= 0x17U;
-                        cpuSp -= 2;
-                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
-                        cpuPc = 0x0058;
-                        goto end_of_int_check;
-                    }
-                    if (interruptable & 0x10U) {
-                        // Joypad
-                        if (cpuHalted) {
-                            cpuPc++;
-                        }
-                        cpuHalted = false;
-                        if (!cpuIme) {
-                            goto end_of_int_check;
-                        }
-                        cpuIme = false;
-                        ioPorts[0x0f] &= 0x0fU;
-                        cpuSp -= 2;
-                        write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
-                        cpuPc = 0x0060;
-                        goto end_of_int_check;
-                    }
+            uint8_t triggeredInterrupts = ioPorts[0xff] & ioPorts[0x0f] & 0x1fU;
+            if (triggeredInterrupts) {
+                uint32_t toAddress = cpuPc;
+                if (triggeredInterrupts & 0x01U) {
+                    // VBlank
+                    ioPorts[0x0f] &= 0x1eU;
+                    toAddress = 0x0040;
+                } else if (triggeredInterrupts & 0x02U) {
+                    // LCD Stat
+                    ioPorts[0x0f] &= 0x1dU;
+                    toAddress = 0x0048;
+                } else if (triggeredInterrupts & 0x04U) {
+                    // Timer
+                    ioPorts[0x0f] &= 0x1bU;
+                    toAddress = 0x0050;
+                } else if (triggeredInterrupts & 0x08U) {
+                    // Serial
+                    ioPorts[0x0f] &= 0x17U;
+                    toAddress = 0x0058;
+                } else if (triggeredInterrupts & 0x10U) {
+                    // Joypad
+                    ioPorts[0x0f] &= 0x0fU;
+                    toAddress = 0x0060;
                 }
+
+                // Unless halted with IME unset, push PC onto stack and go to interrupt handler address
+                if (!cpuHalted || cpuIme) {
+                    cpuSp -= 2;
+                    write16(cpuSp, (uint8_t)(cpuPc & 0xffU), (uint8_t)(cpuPc >> 8U));
+                    cpuPc = toAddress;
+                }
+                cpuMode = CPU_RUNNING;
+                cpuIme = false;
             }
         }
 
-	end_of_int_check:
 #ifdef _WIN32
         if (debugger.breakOnPc) {
             if (cpuPc == debugger.breakPcAddr) {
@@ -642,6 +583,14 @@ int Gbc::execute(const int clocksToRun) {
             }
         }
 #endif
+        // While CPU is in stop mode, nothing much still runs
+        if (cpuMode == CPU_STOPPED) {
+            if (switchRunningSpeed()) {
+                clocksAcc -= 131072;
+                cpuMode = CPU_RUNNING;
+            }
+            continue;
+        }
 
         bool displayEnabled = ioPorts[0x0040] & 0x80U;
 
@@ -724,9 +673,6 @@ int Gbc::execute(const int clocksToRun) {
                                     }
                                     frameManager.finishCurrentFrame();
                                 }
-
-                                // Break out of loop; consume remaining clocks
-                                break;
                             }
                         } else {
                             gpuMode = GPU_SCAN_OAM;
@@ -823,6 +769,7 @@ int Gbc::execute(const int clocksToRun) {
                     break;
                 default: // Error that should never happen:
                     isRunning = false;
+                    clocksAcc = 0;
                     break;
             }
         } else {
@@ -838,16 +785,9 @@ int Gbc::execute(const int clocksToRun) {
                 while (frameManager.frameIsInProgress()) {
                     frameManager.finishCurrentFrame();
                 }
-
-                // Break out of loop; consume remaining clocks
-                break;
             }
         }
     }
-
-    const int clocksConsumed = startClocksAcc - clocksAcc;
-    clocksAcc = 0;
-    return clocksConsumed;
 }
 
 uint8_t Gbc::read8(unsigned int address) {
@@ -1090,21 +1030,25 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                 break;
             case MBC5:
                 if (address < 0x2000U) {
+                    // RAMG - 4 bits, enable external RAM by writing 0xa
                     byte = byte & 0x0fU;
                     sram.enableFlag = byte == 0x0aU;
                     return;
                 } else if (address < 0x3000U) {
-                    // Set lower 8 bits of 9-bit reg in MBC5
+                    // ROMB0 - lower 8 bits of 9-bit ROM bank
                     bankOffset &= 0x00400000U;
                     bankOffset |= (unsigned int)byte * 0x4000U;
                     if (bankOffset == 0) {
-                        // Only exclusion with MBC5 is bank 0
+                        // Cannot set bank 0 - use default of 1
                         bankOffset = 0x4000U;
+                    }
+                    if (bankOffset >= 0x100000) {
+                        bankOffset = 0x4000;
                     }
                     return;
                 }
                 else if (address < 0x4000U) {
-                    // Set bit 9
+                    // ROMB1 - 1 bit, upper bit of 9-bit RAM bank
                     byte &= 0x01U;
                     bankOffset &= 0x003fc000U;
                     if (byte != 0x00U) {
@@ -1114,9 +1058,12 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                         // Only exclusion with MBC5 is bank 0
                         bankOffset = 0x00004000U;
                     }
+                    if (bankOffset >= 0x100000) {
+                        bankOffset = 0x4000;
+                    }
                     return;
                 } else if (address < 0x6000U) {
-                    // Set 4-bit RAM bank register
+                    // RAMB - 4-bit RAM bank
                     byte &= 0x0fU;
                     sram.bankOffset = (unsigned int)byte * 0x2000U;
                     return;
@@ -1621,7 +1568,23 @@ void Gbc::latchTimerData() {
 
 }
 
-
+bool Gbc::switchRunningSpeed() {
+    bool speedChangeRequested = romProperties.cgbFlag && (ioPorts[0x4d] & 0x01U);
+    if (speedChangeRequested) {
+        // Speed change was requested in CGB mode
+        ioPorts[0x4d] &= 0x80U;
+        if (ioPorts[0x4d] == 0x00) {
+            ioPorts[0x4d] = 0x80U;
+            cpuClockFreq = GBC_FREQ;
+            gpuClockFactor = 2;
+        } else {
+            ioPorts[0x4d] = 0x00;
+            cpuClockFreq = GB_FREQ;
+            gpuClockFactor = 1;
+        }
+    }
+    return speedChangeRequested;
+}
 
 
 
@@ -2591,19 +2554,8 @@ int Gbc::performOp() {
             cpuPc++;
             return 4;
         case 0x10: // stop
-            if ((ioPorts[0x4d] & 0x01U) != 0) {
-                ioPorts[0x4d] &= 0x80U;
-                if (ioPorts[0x4d] == 0x00) { // Switch CPU running speed
-                    ioPorts[0x4d] = 0x80U;
-                    cpuClockFreq = GBC_FREQ;
-                    gpuClockFactor = 2;
-                } else {
-                    ioPorts[0x4d] = 0x00;
-                    cpuClockFreq = GB_FREQ;
-                    gpuClockFactor = 1;
-                }
-                cpuPc++;
-            }
+            cpuMode = CPU_STOPPED;
+            cpuPc++;
             return 4;
         case 0x11: // ld DE, nn
             cpuD = read8(cpuPc + 2);
@@ -3258,7 +3210,8 @@ int Gbc::performOp() {
             cpuPc++;
             return 8;
         case 0x76: // halt (NOTE THAT THIS GETS INTERRUPTED EVEN WHEN INTERRUPTS ARE DISABLED)
-            cpuHalted = true;
+            cpuMode = CPU_HALTED;
+            cpuPc++;
             return 4;
         case 0x77: // ld (HL), A
             W8_HL(cpuA);

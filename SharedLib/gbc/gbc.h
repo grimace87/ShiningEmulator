@@ -19,9 +19,10 @@ class Gbc {
     inline void SETH_ON_COND(bool test);
     inline void SETC_ON_COND(bool test);
 
-    int execute(int clocksToRun);
+    void executeAccumulatedClocks();
     int performOp();
     int runInvalidInstruction(uint8_t instruction);
+    bool switchRunningSpeed();
 
     uint8_t read8(unsigned int address);
     void read16(unsigned int address, uint8_t* msb, uint8_t* lsb);
