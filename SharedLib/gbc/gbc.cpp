@@ -18,6 +18,10 @@ uint32_t stockPaletteBg[4] = { 0xffffffffU, 0xff88b0b0U, 0xff507878U, 0xff000000
 uint32_t stockPaletteObj1[4] = { 0xffffffffU, 0xff5050f0U, 0xff2020a0U, 0xff000000U };
 uint32_t stockPaletteObj2[4] = { 0xffffffffU, 0xffa0a0a0U, 0xff404040U, 0xff000000U };
 
+#define CPU_RUNNING   0x00U
+#define CPU_HALTED    0x01U
+#define CPU_STOPPED   0x02U
+
 #define GPU_HBLANK    0x00U
 #define GPU_VBLANK    0x01U
 #define GPU_SCAN_OAM  0x02U
@@ -38,13 +42,14 @@ Gbc::Gbc() {
     // Initialise vars, many will be overwritten when reset() is called
     cpuPc = cpuSp = 0;
     cpuA = cpuB = cpuC = cpuD = cpuE = cpuF = cpuH = cpuL = 0;
-    clocksAcc = clocksRun = 0;
+    clocksAcc = 0;
     cpuClockFreq = 1;
     cpuDividerCount = 1;
     gpuClockFactor = 1;
     gpuTimeInMode = 0;
-    cpuHalted = cpuStopped = blankedScreen = false;
+    blankedScreen = false;
     needClear = true;
+    cpuMode = CPU_RUNNING;
     gpuMode = GPU_VBLANK;
 
     // Flag not running and no ROM loaded
@@ -87,20 +92,23 @@ Gbc::~Gbc() {
     delete[] sgb.chrPalettes;
 }
 
-void Gbc::onInvalidInstruction(uint8_t instruction) {
+// Return how many clock ticks to consume when this happens,
+// also perform any other behaviour deemed necessary
+int Gbc::runInvalidInstruction(uint8_t instruction) {
     isPaused = true;
+    return clocksAcc;
     //std::string msg = "Illegal operation - " + std::to_string((int)instruction);
     //throw new std::runtime_error(msg);
 }
 
 void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
-    static int noClocks = 0;
+    static int accumulatedClocks = 0;
     if (isRunning && !isPaused) {
         // Determine how many clock cycles to emulate, cap at 1000000 (about a quarter of a second)
         const int adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
-        noClocks += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
-        if (noClocks > 1000000) {
-            noClocks = 1000000;
+        accumulatedClocks += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
+        if (accumulatedClocks > 1000000) {
+            accumulatedClocks = 1000000;
         }
 
         // Copy inputs
@@ -110,11 +118,12 @@ void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
         // Execute this many clock cycles and catch errors
         //try
         //{
-        noClocks -= execute(noClocks);
+        int consumedClocks = execute(accumulatedClocks);
+        accumulatedClocks -= consumedClocks;
         //}
         //catch (const std::runtime_error& err)
         //{
-        //	noClocks = 0;
+        //	accumulatedClocks = 0;
         //	std::cerr << err.what() << std::endl;
         //}
     }
@@ -379,8 +388,7 @@ void Gbc::reset() {
 
     // Initialise control variables
     cpuIme = false;
-    cpuHalted = false;
-    cpuStopped = false;
+    cpuMode = CPU_RUNNING;
     gpuMode = GPU_SCAN_OAM;
     gpuTimeInMode = 0;
     keys.clear();
@@ -498,13 +506,12 @@ void Gbc::reset() {
     isPaused = false;
 }
 
-int Gbc::execute(int ticks) {
-    int startClocksAcc;
-    bool displayEnabled;
-
+// Run emulation - accept number of clocks needing to run as an argument,
+// return how many were actually consumed
+int Gbc::execute(const int clocksToRun) {
     // Increment clocks accumulator
-    clocksAcc += ticks;
-    startClocksAcc = clocksAcc;
+    clocksAcc += clocksToRun;
+    const int startClocksAcc = clocksAcc;
 
     // Handle key state if required
     if (keyStateChanged) {
@@ -532,10 +539,9 @@ int Gbc::execute(int ticks) {
 
         // Run appropriate RunOp function, depending on opcode
         // Pass three bytes in case all are needed, sets PC increment and clocks taken
-        unsigned int clocksSub = performOp();
+        int clocksPassedByInstruction = performOp();
         cpuPc &= 0xffffU; // Clamp PC to 16 bits
-        clocksAcc -= clocksSub; // Dependent on instruction run
-        clocksRun += clocksSub;
+        clocksAcc -= clocksPassedByInstruction;
 
         // Check for interrupts:
         if (cpuIme || cpuHalted) {
@@ -637,7 +643,7 @@ int Gbc::execute(int ticks) {
         }
 #endif
 
-        displayEnabled = ioPorts[0x0040] & 0x80U;
+        bool displayEnabled = ioPorts[0x0040] & 0x80U;
 
         // Permanent compare of LY and LYC
         if ((ioPorts[0x44] == ioPorts[0x45]) && displayEnabled) {
@@ -653,7 +659,7 @@ int Gbc::execute(int ticks) {
         }
 
         // Handling of timers
-        cpuDividerCount += clocksSub;
+        cpuDividerCount += clocksPassedByInstruction;
         if (cpuDividerCount >= 256) {
             cpuDividerCount -= 256;
             ioPorts[0x04]++;
@@ -673,7 +679,7 @@ int Gbc::execute(int ticks) {
         // Handle serial port timeout
         if (serialIsTransferring) {
             if (!serialClockIsExternal) {
-                serialTimer -= clocksSub;
+                serialTimer -= clocksPassedByInstruction;
                 if (serialTimer <= 0) {
                     serialIsTransferring = false;
                     ioPorts[0x02] &= 0x03U; // Clear the transferring indicator
@@ -689,7 +695,8 @@ int Gbc::execute(int ticks) {
 
         // Handle GPU timings
         if (displayEnabled) {
-            gpuTimeInMode += clocksSub / gpuClockFactor; // GPU clock factor accounts for double speed mode
+            // Double CPU speed mode affects instruction rate but should not affect GPU speed
+            gpuTimeInMode += clocksPassedByInstruction / gpuClockFactor;
             switch (gpuMode) {
                 case GPU_HBLANK:
                     // Spends 204 cycles here, then moves to next line. After 144th hblank, move to vblank.
@@ -717,9 +724,9 @@ int Gbc::execute(int ticks) {
                                     }
                                     frameManager.finishCurrentFrame();
                                 }
-                                startClocksAcc -= clocksAcc;
-                                clocksAcc = 0;
-                                return startClocksAcc;
+
+                                // Break out of loop; consume remaining clocks
+                                break;
                             }
                         } else {
                             gpuMode = GPU_SCAN_OAM;
@@ -832,16 +839,15 @@ int Gbc::execute(int ticks) {
                     frameManager.finishCurrentFrame();
                 }
 
-                startClocksAcc -= clocksAcc;
-                clocksAcc = 0;
-                return startClocksAcc;
+                // Break out of loop; consume remaining clocks
+                break;
             }
         }
     }
 
-    startClocksAcc -= clocksAcc;
+    const int clocksConsumed = startClocksAcc - clocksAcc;
     clocksAcc = 0;
-    return startClocksAcc;
+    return clocksConsumed;
 }
 
 uint8_t Gbc::read8(unsigned int address) {
@@ -5704,8 +5710,7 @@ int Gbc::performOp() {
                 return 16;
             }
         case 0xd3: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xd4: // call NC, nn
             if ((cpuF & 0x10U) != 0x00)
             {
@@ -5803,8 +5808,7 @@ int Gbc::performOp() {
                 return 12;
             }
         case 0xdb: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xdc: // call C, nn
             if ((cpuF & 0x10U) != 0x00) {
                 uint8_t msb = read8(cpuPc + 1);
@@ -5826,8 +5830,7 @@ int Gbc::performOp() {
                 return 12;
             }
         case 0xdd: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xde: // sbc A, n
         {
             uint8_t tempByte = cpuA;
@@ -5877,11 +5880,9 @@ int Gbc::performOp() {
             cpuPc++;
             return 8;
         case 0xe3: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xe4: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xe5: // push HL
             cpuSp -= 2;
             write16(cpuSp, cpuL, cpuH);
@@ -5935,14 +5936,11 @@ int Gbc::performOp() {
             cpuPc += 3;
             return 16;
         case 0xeb: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xec: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xed: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xee: // xor n
             cpuA = cpuA ^ read8(cpuPc + 1);
             cpuF = 0x00;
@@ -5981,8 +5979,7 @@ int Gbc::performOp() {
             cpuPc++;
             return 4;
         case 0xf4: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xf5: // push AF
             cpuSp -= 2;
             write16(cpuSp, cpuF, cpuA);
@@ -6042,11 +6039,9 @@ int Gbc::performOp() {
             cpuIme = true;
             return 4;
         case 0xfc: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xfd: // REMOVED INSTRUCTION
-            onInvalidInstruction(instr);
-            return clocksAcc;
+            return runInvalidInstruction(instr);
         case 0xfe: // cp n
         {
             uint8_t msb = read8(cpuPc + 1);

@@ -19,9 +19,9 @@ class Gbc {
     inline void SETH_ON_COND(bool test);
     inline void SETC_ON_COND(bool test);
 
-    int execute(int ticks);
+    int execute(int clocksToRun);
     int performOp();
-    void onInvalidInstruction(uint8_t instruction);
+    int runInvalidInstruction(uint8_t instruction);
 
     uint8_t read8(unsigned int address);
     void read16(unsigned int address, uint8_t* msb, uint8_t* lsb);
@@ -42,14 +42,12 @@ class Gbc {
 
     // CPU stats
     int clocksAcc;
-    int clocksRun;
     int cpuClockFreq;
     int gpuClockFactor;
     int gpuTimeInMode;
     int gpuMode{};
     bool cpuIme{};
-    bool cpuHalted;
-    bool cpuStopped;
+    int cpuMode;
     unsigned int cpuDividerCount;
     unsigned int cpuTimerCount{};
     unsigned cpuTimerIncTime{};
