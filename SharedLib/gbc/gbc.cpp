@@ -834,7 +834,7 @@ int Gbc::execute(int ticks) {
 
                 while (frameManager.frameIsInProgress()) {
                     uint32_t* frame = frameManager.getInProgressFrameBuffer();
-                    frameManager.freeFrame(frame);
+                    frameManager.finishCurrentFrame();
                 }
 
                 startClocksAcc -= clocksAcc;
