@@ -73,6 +73,7 @@ Gbc::Gbc() {
 
     // Clear things that should be cleared
     std::fill(tileSet, tileSet + 2 * 384 * 8 * 8, 0);
+    std::fill(sgb.monoData, sgb.monoData + 160 * 152, 0);
     std::fill(sgb.palettes, sgb.palettes + 4 * 4, 0);
     std::fill(sgb.sysPalettes, sgb.sysPalettes + 512 * 4, 0);
     std::fill(sgb.chrPalettes, sgb.chrPalettes + 18 * 20, 0);
