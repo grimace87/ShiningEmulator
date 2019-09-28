@@ -1548,11 +1548,10 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             if (!romProperties.cgbFlag) {
                 return;
             }
-            ioPorts[0x70] = data & 0x07U;
-            if (ioPorts[0x70] == 0x00U) {
-                ioPorts[0x70]++;
-            }
-            wramBankOffset = (unsigned int)ioPorts[0x70] * 0x2000U;
+            data &= 0x07U;
+            data = data != 0 ? data : 1;
+            wramBankOffset = (unsigned int)data * 0x1000U;
+            ioPorts[0x70] = data;
             return;
         default:
             ioPorts[ioIndex] = data;
