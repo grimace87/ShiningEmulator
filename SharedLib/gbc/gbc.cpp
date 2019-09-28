@@ -2132,19 +2132,22 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 tileNo += 0x0180U;
             }
 
+            // Set which palette to draw with
+            paletteOffset = 4 * (tileParams & 0x07U);
+
             // Draw up to 8 pixels of this tile
             if (tileParams & 0x0020U) {
                 // Flipped horizontally
                 unsigned int drawnX = 7 - pixX;
                 tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer--];
+                    *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer--];
                     pixX++;
                 }
             } else {
                 tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer++];
+                    *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer++];
                     pixX++;
                 }
             }
@@ -2168,18 +2171,21 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         }
         tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
 
+        // Set which palette to draw with
+        paletteOffset = 4 * (tileParams & 0x07U);
+
         // Draw up to 8 pixels of this tile
         if (tileParams & 0x0020U) {
             // Flipped horizontally
             unsigned int drawnX = 7 - pixX;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
             while (pixX < max) {
-                *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer--];
+                *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer--];
                 pixX++;
             }
         } else {
             while (pixX < max) {
-                *dstPointer++ = cgbBgPalette[4 * (tileParams & 0x07U) + *tileSetPointer++];
+                *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer++];
                 pixX++;
             }
         }
@@ -2218,7 +2224,9 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 // Using bank 1
                 tileNo += 0x0180U;
             }
-            tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
+
+            // Set which palette to draw with
+            paletteOffset = 4 * (tileParams & 0x07U);
 
             // Draw the 8 pixels of this tile
             if (tileParams & 0x0020U) {
@@ -2226,12 +2234,13 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 unsigned int drawnX = 7 - pixX;
                 tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer--];
+                    *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer--];
                     pixX++;
                 }
             } else {
+                tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
                 while (pixX < 8) {
-                    *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer++];
+                    *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer++];
                     pixX++;
                 }
             }
@@ -2255,18 +2264,21 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         }
         tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + pixX];
 
+        // Set which palette to draw with
+        paletteOffset = 4 * (tileParams & 0x07U);
+
         // Draw up to 8 pixels of this tile
         if (tileParams & 0x0020U) {
             // Flipped horizontally
             unsigned int drawnX = 7 - pixX;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
             while (pixX < offset) {
-                *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer--];
+                *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer--];
                 pixX++;
             }
         } else {
             while (pixX < offset) {
-                *dstPointer++ = cgbBgPalette[(tileParams & 0x07U) + *tileSetPointer++];
+                *dstPointer++ = cgbBgPalette[paletteOffset + *tileSetPointer++];
                 pixX++;
             }
         }
@@ -2319,7 +2331,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             pixY = (lineNo + 16 - scrY) % 8;
 
             // Set which palette to draw with
-            paletteOffset = (spriteFlags & 0x07U) << 2U;
+            paletteOffset = 4 * (spriteFlags & 0x07U);
 
             // Get first pixel in tile row to draw, plus how many pixels to draw, and adjust the starting point to write to in the image
             if (scrX < 8) {
