@@ -1,3 +1,4 @@
+#include <string>
 #include "gbcapp.h"
 
 #include "gbcappstate.h"
@@ -60,7 +61,12 @@ void GbcApp::processMsg(const Message& msg) {
             if (App::pendingFileToOpen) {
                 Resource* resource = platform.getResource(App::pendingFileToOpen, false, false);
                 if (resource) {
-                    gbc.loadRom("rom.gb", resource->rawStream, resource->rawDataLength, platform);
+                    std::string nameForSramFile(App::pendingFileToOpen);
+                    auto lastSlash = nameForSramFile.find_last_of("/\\", nameForSramFile.length());
+                    if (lastSlash != std::string::npos) {
+                        nameForSramFile = nameForSramFile.substr(lastSlash + 1);
+                    }
+                    gbc.loadRom(nameForSramFile, resource->rawStream, resource->rawDataLength, platform);
                     if (gbc.romProperties.valid) {
                         GbcAppState::getCurrentInstance()->appMode = AppMode::PLAYING;
                         gbc.reset();
