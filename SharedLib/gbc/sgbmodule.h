@@ -23,7 +23,7 @@ public:
     unsigned int readJoypadID;
     unsigned int* chrPalettes;
 
-    unsigned int* monoData;
+    uint32_t* monoData;
     unsigned char* mappedVramForTrnOp;
     uint32_t* palettes;
     uint32_t* sysPalettes;

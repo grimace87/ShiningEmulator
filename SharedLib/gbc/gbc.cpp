@@ -64,8 +64,8 @@ Gbc::Gbc() {
     wram = new uint8_t[4 * 4096];
     vram = new uint8_t[2 * 8192];
     ioPorts = new uint8_t[256];
-    tileSet = new unsigned int[2 * 384 * 8 * 8]; // 2 VRAM banks, 384 tiles, 8 rows, 8 pixels per row
-    sgb.monoData = new unsigned int[160 * 152];
+    tileSet = new uint32_t[2 * 384 * 8 * 8]; // 2 VRAM banks, 384 tiles, 8 rows, 8 pixels per row
+    sgb.monoData = new uint32_t[160 * 152];
     sgb.mappedVramForTrnOp = new uint8_t[4096];
     sgb.palettes = new unsigned int[4 * 4];
     sgb.sysPalettes = new unsigned int[512 * 4]; // 512 palettes, 4 colours per palette, RGB
@@ -1071,25 +1071,33 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
         }
     } else if (address < 0xa000U) {
         if (accessVram) {
+            // Mask to address within range 0x0000-0x1fff and write to that VRAM address
             address = address & 0x1fffU;
             vram[vramBankOffset + address] = byte;
+
+            // Decode character set from GB format to something more computer-friendly
             if (address < 0x1800U) {
-                // Pre-calculate pixels in tile set
-                address = address & 0x1ffeU;
-                unsigned int byte1 = 0xffU & (unsigned int)vram[vramBankOffset + address];
-                unsigned int byte2 = 0xffU & (unsigned int)vram[vramBankOffset + address + 1];
-                address = address * 4;
-                if (vramBankOffset != 0) {
-                    address += 24576;
+
+                // Get the pair of bytes just modified (i.e. one row in the character)
+                // Note there are 384 characters in the map, per VRAM bank, each stored with 16 bytes
+                size_t relativeVramAddress = address & 0x1ffeU;
+                uint32_t byte1 = 0xffU & (uint32_t)vram[vramBankOffset + relativeVramAddress];
+                uint32_t byte2 = 0xffU & (uint32_t)vram[vramBankOffset + relativeVramAddress + 1];
+
+                // Find the address into decoded data to update now
+                // The output format uses 64 bytes per tile rather than 16, hence input address * 4
+                size_t outputAddress = relativeVramAddress * 4;
+                if (vramBankOffset) {
+                    outputAddress += 24576;
                 }
-                tileSet[address++] = ((byte2 >> 6U) & 0x02U) + (byte1 >> 7U);
-                tileSet[address++] = ((byte2 >> 5U) & 0x02U) + ((byte1 >> 6U) & 0x01U);
-                tileSet[address++] = ((byte2 >> 4U) & 0x02U) + ((byte1 >> 5U) & 0x01U);
-                tileSet[address++] = ((byte2 >> 3U) & 0x02U) + ((byte1 >> 4U) & 0x01U);
-                tileSet[address++] = ((byte2 >> 2U) & 0x02U) + ((byte1 >> 3U) & 0x01U);
-                tileSet[address++] = ((byte2 >> 1U) & 0x02U) + ((byte1 >> 2U) & 0x01U);
-                tileSet[address++] = (byte2 & 0x02U) + ((byte1 >> 1U) & 0x01U);
-                tileSet[address] = ((byte2 << 1U) & 0x02U) + (byte1 & 0x01U);
+                tileSet[outputAddress++] = ((byte2 >> 6U) & 0x02U) + (byte1 >> 7U);
+                tileSet[outputAddress++] = ((byte2 >> 5U) & 0x02U) + ((byte1 >> 6U) & 0x01U);
+                tileSet[outputAddress++] = ((byte2 >> 4U) & 0x02U) + ((byte1 >> 5U) & 0x01U);
+                tileSet[outputAddress++] = ((byte2 >> 3U) & 0x02U) + ((byte1 >> 4U) & 0x01U);
+                tileSet[outputAddress++] = ((byte2 >> 2U) & 0x02U) + ((byte1 >> 3U) & 0x01U);
+                tileSet[outputAddress++] = ((byte2 >> 1U) & 0x02U) + ((byte1 >> 2U) & 0x01U);
+                tileSet[outputAddress++] = (byte2 & 0x02U) + ((byte1 >> 1U) & 0x01U);
+                tileSet[outputAddress] = ((byte2 << 1U) & 0x02U) + (byte1 & 0x01U);
             }
         }
     } else if (address < 0xc000U) {
@@ -1640,7 +1648,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     unsigned int offset, max;
     unsigned int pixX, pixY, tileX, tileY;
     uint32_t* dstPointer;
-    unsigned int* tileSetPointer;
+    uint32_t* tileSetPointer;
 
     // Sprite-specific stuff:
     unsigned int paletteOffset;
@@ -1870,8 +1878,8 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
     // More variables
     unsigned int offset, max;
     unsigned int pixX, pixY, tileX, tileY;
-    unsigned int* dstPointer;
-    unsigned int* tileSetPointer;
+    uint32_t* dstPointer;
+    uint32_t* tileSetPointer;
 
     // Sprite-specific stuff:
     unsigned int paletteOffset;
@@ -2094,7 +2102,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
     unsigned int offset, max;
     unsigned int pixX, pixY, tileX, tileY;
     uint32_t* dstPointer;
-    unsigned int* tileSetPointer;
+    uint32_t* tileSetPointer;
 
     // Sprite-specific stuff:
     unsigned int paletteOffset;
@@ -2324,7 +2332,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 continue;
             }
             if (spriteFlags & 0x08U) {
-                tileNo += 192;
+                tileNo += 384;
             }
 
             // Get pixel row within tile that will be drawn

@@ -75,7 +75,7 @@ class Gbc {
     unsigned int cgbObjPalIncr{};
 
     // Block memory
-    unsigned int* tileSet;
+    uint32_t* tileSet;
 
     // Other variables
     unsigned int lastLYCompare{};
