@@ -7,6 +7,7 @@
 #include <map>
 #include <functional>
 
+class PlatformRenderer;
 class Resource;
 class App;
 class Gbc;
@@ -25,6 +26,7 @@ public:
     GamepadInputs gamepadInputs;
     bool usesTouch = false;
     virtual bool onAppThreadStarted(App* app) = 0;
+    virtual PlatformRenderer* newPlatformRenderer() = 0;
     virtual Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) = 0;
     virtual Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) = 0;
     virtual FILE* openFileInAppDir(std::string fileName, const char* mode) = 0;

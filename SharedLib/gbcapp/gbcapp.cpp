@@ -6,7 +6,6 @@
 #include "../uidefs.h"
 #include "../uielements.h"
 #include "../gbc/gbc.h"
-#include "../rendererfactory.h"
 #include "../resource.h"
 #include "../appplatform.h"
 #include "../messagedefs.h"
@@ -14,7 +13,7 @@
 GbcAppState persistentState;
 Gbc gbc;
 
-GbcApp::GbcApp(AppPlatform& platform, RendererFactory& rendererFactory) : App(platform, rendererFactory) {
+GbcApp::GbcApp(AppPlatform& platform) : App(platform) {
     loadPersistentState();
 }
 
@@ -84,7 +83,7 @@ void GbcApp::processMsg(const Message& msg) {
 }
 
 bool GbcApp::createRenderer() {
-    renderer = new GbcRenderer(&platform, rendererFactory.newPlatformRenderer(), &gbc);
+    renderer = new GbcRenderer(&platform, platform.newPlatformRenderer(), &gbc);
     renderer->startThread();
     return true;
 }

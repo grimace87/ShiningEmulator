@@ -6,7 +6,7 @@
 AppState* App::savedState = nullptr;
 char* App::pendingFileToOpen = nullptr;
 
-App::App(AppPlatform& platform, RendererFactory& rendererFactory) : menu(Menu::buildMain()), platform(platform), rendererFactory(rendererFactory) {
+App::App(AppPlatform& platform) : menu(Menu::buildMain()), platform(platform) {
     savedState = nullptr;
     renderer = nullptr;
     platform.releaseAllInputs();

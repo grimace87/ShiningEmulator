@@ -13,7 +13,7 @@ protected:
     void processMsg(const Message& msg) override;
     bool createRenderer() override;
 public:
-    GbcApp(AppPlatform& platform, RendererFactory& rendererFactory);
+    GbcApp(AppPlatform& platform);
     ~GbcApp() override;
 	Gbc* getGbc();
     void persistState() override;

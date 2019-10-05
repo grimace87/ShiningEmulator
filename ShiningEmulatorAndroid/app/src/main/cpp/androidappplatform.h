@@ -27,7 +27,7 @@ class AndroidAppPlatform final : public AppPlatform {
 	jclass javaActivityClass;
     int destroyed;
     int redrawNeeded;
-    ANativeWindow* pendingWindow;
+	ANativeWindow* window;
     ARect pendingContentRect;
 	void handleKeyboardEvent(uint32_t keyCode, bool keyDown);
 	void handleGamepadInput(int32_t keyCode, bool keyDown);
@@ -37,6 +37,7 @@ protected:
 	uint64_t getUptimeMillis() override;
 
 public:
+	PlatformRenderer* newPlatformRenderer() final;
 	Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) override;
 	Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) override;
 	FILE* openFileInAppDir(std::string fileName, const char* mode) override;
@@ -45,7 +46,7 @@ public:
 	void pollGamepad() override;
 	int32_t handleInputEvent(AInputEvent* event);
 
-	AndroidAppPlatform(ANativeActivity* activity);
+	AndroidAppPlatform(ANativeActivity* activity, ANativeWindow* window);
     ANativeActivity* activity;
 	void setJavaActivityClass(jclass klass);
 

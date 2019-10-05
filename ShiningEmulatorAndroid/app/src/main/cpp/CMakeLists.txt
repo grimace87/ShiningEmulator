@@ -7,7 +7,6 @@ add_library(android-app SHARED
         android_main.cpp
         androidappplatform.cpp
         androidrenderer.cpp
-        androidrendererfactory.cpp
         androidresource.cpp)
 
 find_library(log-lib log)

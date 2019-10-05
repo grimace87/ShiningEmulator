@@ -28,7 +28,6 @@
 #include "androidappplatform.h"
 #include "../../../../../SharedLib/app.h"
 #include "../../../../../SharedLib/resource.h"
-#include "androidrendererfactory.h"
 #include "../../../../../SharedLib/gbcapp/gbcapp.h"
 
 // Forward declarations
@@ -102,10 +101,9 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
      */
 
     // Create new app instance
-    auto platform = new AndroidAppPlatform(activity);
+    auto platform = new AndroidAppPlatform(activity, window);
     platform->setJavaActivityClass(globalActivityClassRef);
-    auto rendererFactory = new AndroidRendererFactory(window);
-    app = new GbcApp(*platform, *rendererFactory);
+    app = new GbcApp(*platform);
     app->startThread();
     activity->instance = app;
 

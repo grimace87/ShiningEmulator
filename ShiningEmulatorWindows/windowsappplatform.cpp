@@ -3,20 +3,31 @@
 #include "windowsresource.h"
 #include "windowsfilehelper.h"
 #include "../SharedLib/menu.h"
+#include "windowsappplatform.h"
+#include "windowsrenderer.h"
+#include "../SharedLib/gbc/debugwindowmodule.h"
 
 #include <Xinput.h>
 #include <shtypes.h>
 #include <ShObjIdl_core.h>
 
-#include "../SharedLib/gbc/debugwindowmodule.h"
-
-WindowsAppPlatform::WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd) : hInstance(hInstance), hWnd(hWnd), mainMenu(Menu::buildMain()) {
+WindowsAppPlatform::WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd, HDC hDC, int width, int height) :
+        hInstance(hInstance),
+        hWnd(hWnd),
+        mainMenu(Menu::buildMain()),
+        hDC(hDC),
+        canvasWidth(width),
+        canvasHeight(height) {
 	this->usesTouch = false;
 }
 
 bool WindowsAppPlatform::onAppThreadStarted(App* app) {
     HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     return result == S_OK;
+}
+
+PlatformRenderer* WindowsAppPlatform::newPlatformRenderer() {
+    return new WindowsRenderer(hDC, canvasWidth, canvasHeight);
 }
 
 Resource* WindowsAppPlatform::getResource(const char* fileName, bool isAsset, bool isGlShader) {

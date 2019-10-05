@@ -5,13 +5,12 @@
 
 class AppState;
 class AppPlatform;
-class RendererFactory;
 class Renderer;
 class Message;
 
 class App : public Thread {
 public:
-    App(AppPlatform& platform, RendererFactory& rendererFactory);
+    App(AppPlatform& platform);
     virtual ~App();
     Menu menu;
     AppPlatform& platform;
@@ -29,7 +28,6 @@ public:
     void removeCursor(int id);
     void removeAllCursors();
 protected:
-    RendererFactory& rendererFactory;
     Renderer* renderer;
     void processMsg(const Message& msg) override = 0;
     virtual bool createRenderer() = 0;

@@ -17,6 +17,7 @@
 
 #include "androidappplatform.h"
 #include "androidresource.h"
+#include "androidrenderer.h"
 #include "../../../../../SharedLib/app.h"
 
 #include <android/log.h>
@@ -32,18 +33,18 @@
 #endif
 
 // Create a blank object
-AndroidAppPlatform::AndroidAppPlatform(ANativeActivity* _activity) : AppPlatform() {
+AndroidAppPlatform::AndroidAppPlatform(ANativeActivity* activity, ANativeWindow* window) :
+        AppPlatform(),
+        activity(activity),
+        window(window) {
+
     // Clear state
     activity = nullptr;
-    pendingWindow = nullptr;
     memset(&contentRect, 0, sizeof(ARect));
     destroyRequested = 0;
     destroyed = 0;
     redrawNeeded = 0;
     memset(&pendingContentRect, 0, sizeof(ARect));
-
-    // Store activity reference
-    activity = _activity;
     javaActivityClass = nullptr;
 
     // Signal using touchscreen
@@ -61,6 +62,10 @@ uint64_t AndroidAppPlatform::getUptimeMillis() {
     uint64_t seconds = (uint64_t)spec.tv_sec;
     uint64_t nanos = (uint64_t)spec.tv_nsec;
     return (seconds * 1e3) + (nanos / 1e6);
+}
+
+PlatformRenderer* AndroidAppPlatform::newPlatformRenderer() {
+    return new AndroidRenderer(window);
 }
 
 Resource* AndroidAppPlatform::getResource(const char* fileName, bool isAsset, bool isGlShader) {

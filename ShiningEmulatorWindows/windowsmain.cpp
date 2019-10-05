@@ -1,6 +1,5 @@
 
 #include "windowsappplatform.h"
-#include "windowsrendererfactory.h"
 #include "res/res.h"
 
 #include "../SharedLib/gbcapp/gbcapp.h"
@@ -80,11 +79,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     UpdateWindow(hWnd);
 
     // Create the dependencies for the app
-    WindowsAppPlatform appPlatform(hInst, hWnd);
-    WindowsRendererFactory rendererFactory(hDC, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
+    WindowsAppPlatform appPlatform(hInst, hWnd, hDC, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 
     // Construct the app using Windows dependencies
-    runningApp = new GbcApp(appPlatform, rendererFactory);
+    runningApp = new GbcApp(appPlatform);
     runningApp->startThread();
 
     // Create the menu
