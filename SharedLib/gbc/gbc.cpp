@@ -1386,6 +1386,7 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
                 accessVram = true;
                 accessOam = true;
                 blankedScreen = false;
+                ioPorts[0x41] &= 0xfcU;
                 ioPorts[0x44] = 0;
                 if (ioPorts[0x40] >= 0x80U) {
                     // Try to clear the screen. Be prepared to wait because frame rate is irrelevant when LCD is disabled.
