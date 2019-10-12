@@ -10,12 +10,15 @@
 
 #define LAUNCH_DEBUG_MSG WM_USER + 1
 
-class Gbc;
+#include "debugutils.h"
 
 class DebugWindowModule {
 
 	// Current GBC instance
 	static Gbc* gbc;
+
+	// Utility class
+    DebugUtils utils;
 
 	// Register class
 	static ATOM registerWindowClass(HINSTANCE instance);
@@ -41,6 +44,7 @@ class DebugWindowModule {
 	static HWND breakWriteAddrComponent;
 	static HWND breakReadComponent;
 	static HWND breakReadAddrComponent;
+	static HWND generateStackTraceButtonComponent;
 
 	// Custom window procedures for the window and components
 	static LRESULT APIENTRY debugWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -52,6 +56,7 @@ class DebugWindowModule {
 	static LRESULT APIENTRY breakPcAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT APIENTRY breakWriteAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT APIENTRY breakReadAddrWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT APIENTRY generateStackTraceButtonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 	// Handles to default window procedures
 	static WNDPROC pauseButtonDefProc;
@@ -66,6 +71,7 @@ class DebugWindowModule {
 	static WNDPROC breakWriteAddrDefProc;
 	static WNDPROC breakReadDefProc;
 	static WNDPROC breakReadAddrDefProc;
+    static WNDPROC generateStackTraceButtonDefProc;
 
 	// Configure UI on pause/unpause
 	static void updateUiOnPause();
@@ -111,6 +117,7 @@ public:
 
 private:
     BreakCode breakCode;
+    void writeStackTraceFile();
 };
 
 #endif

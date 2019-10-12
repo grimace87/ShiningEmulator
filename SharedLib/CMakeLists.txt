@@ -21,6 +21,7 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         gbcapp/gbcrenderer.cpp
         gbc/gbc.cpp
         gbc/debugwindowmodule.cpp
+        gbc/debugutils.cpp
         gbc/framemanager.cpp
         gbc/sgbmodule.cpp
         gbc/sram.cpp

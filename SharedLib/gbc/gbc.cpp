@@ -2,7 +2,6 @@
 
 #include "colourutils.h"
 
-#include <iostream>
 #include <algorithm>
 #include <stdexcept>
 #include <thread>

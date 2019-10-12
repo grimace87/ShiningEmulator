@@ -16,35 +16,37 @@ constexpr wchar_t debugWindowClassName[] = L"ShDebug";
 Gbc* DebugWindowModule::gbc = nullptr;
 
 // Declare private static class variables
- HWND DebugWindowModule::debugWindow = nullptr;
- HWND DebugWindowModule::debugStatusComponent = nullptr;
- HWND DebugWindowModule::romTextComponent = nullptr;
- HWND DebugWindowModule::debugTextComponent = nullptr;
- HWND DebugWindowModule::staticTextComponent = nullptr;
- HWND DebugWindowModule::pauseButtonComponent = nullptr;
- HWND DebugWindowModule::refreshButtonComponent = nullptr;
- HWND DebugWindowModule::dropdownBoxComponent = nullptr;
- HWND DebugWindowModule::dropdownBankComponent = nullptr;
- HWND DebugWindowModule::breakSramEnableComponent = nullptr;
- HWND DebugWindowModule::breakSramDisableComponent = nullptr;
- HWND DebugWindowModule::breakPcComponent = nullptr;
- HWND DebugWindowModule::breakPcAddrComponent = nullptr;
- HWND DebugWindowModule::breakWriteComponent = nullptr;
- HWND DebugWindowModule::breakWriteAddrComponent = nullptr;
- HWND DebugWindowModule::breakReadComponent = nullptr;
- HWND DebugWindowModule::breakReadAddrComponent = nullptr;
- WNDPROC DebugWindowModule::pauseButtonDefProc = nullptr;
- WNDPROC DebugWindowModule::refreshButtonDefProc = nullptr;
- WNDPROC DebugWindowModule::dropdownDefProc = nullptr;
- WNDPROC DebugWindowModule::dropdownBankDefProc = nullptr;
- WNDPROC DebugWindowModule::breakSramEnableDefProc = nullptr;
- WNDPROC DebugWindowModule::breakSramDisableDefProc = nullptr;
- WNDPROC DebugWindowModule::breakPcDefProc = nullptr;
- WNDPROC DebugWindowModule::breakPcAddrDefProc = nullptr;
- WNDPROC DebugWindowModule::breakWriteDefProc = nullptr;
- WNDPROC DebugWindowModule::breakWriteAddrDefProc = nullptr;
- WNDPROC DebugWindowModule::breakReadDefProc = nullptr;
- WNDPROC DebugWindowModule::breakReadAddrDefProc = nullptr;
+HWND DebugWindowModule::debugWindow = nullptr;
+HWND DebugWindowModule::debugStatusComponent = nullptr;
+HWND DebugWindowModule::romTextComponent = nullptr;
+HWND DebugWindowModule::debugTextComponent = nullptr;
+HWND DebugWindowModule::staticTextComponent = nullptr;
+HWND DebugWindowModule::pauseButtonComponent = nullptr;
+HWND DebugWindowModule::refreshButtonComponent = nullptr;
+HWND DebugWindowModule::dropdownBoxComponent = nullptr;
+HWND DebugWindowModule::dropdownBankComponent = nullptr;
+HWND DebugWindowModule::breakSramEnableComponent = nullptr;
+HWND DebugWindowModule::breakSramDisableComponent = nullptr;
+HWND DebugWindowModule::breakPcComponent = nullptr;
+HWND DebugWindowModule::breakPcAddrComponent = nullptr;
+HWND DebugWindowModule::breakWriteComponent = nullptr;
+HWND DebugWindowModule::breakWriteAddrComponent = nullptr;
+HWND DebugWindowModule::breakReadComponent = nullptr;
+HWND DebugWindowModule::breakReadAddrComponent = nullptr;
+HWND DebugWindowModule::generateStackTraceButtonComponent = nullptr;
+WNDPROC DebugWindowModule::pauseButtonDefProc = nullptr;
+WNDPROC DebugWindowModule::refreshButtonDefProc = nullptr;
+WNDPROC DebugWindowModule::dropdownDefProc = nullptr;
+WNDPROC DebugWindowModule::dropdownBankDefProc = nullptr;
+WNDPROC DebugWindowModule::breakSramEnableDefProc = nullptr;
+WNDPROC DebugWindowModule::breakSramDisableDefProc = nullptr;
+WNDPROC DebugWindowModule::breakPcDefProc = nullptr;
+WNDPROC DebugWindowModule::breakPcAddrDefProc = nullptr;
+WNDPROC DebugWindowModule::breakWriteDefProc = nullptr;
+WNDPROC DebugWindowModule::breakWriteAddrDefProc = nullptr;
+WNDPROC DebugWindowModule::breakReadDefProc = nullptr;
+WNDPROC DebugWindowModule::breakReadAddrDefProc = nullptr;
+WNDPROC DebugWindowModule::generateStackTraceButtonDefProc = nullptr;
 
 DebugWindowModule::DebugWindowModule() noexcept {
 	// Reset public instance variables
@@ -112,7 +114,7 @@ void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc
     debugWindow = CreateWindow(
 		debugWindowClassName, debugWindowName,
         WS_CAPTION | WS_VISIBLE | WS_POPUPWINDOW | WS_CHILD | WS_TABSTOP,
-        5, 5, 638, 692,
+        5, 5, 638, 734,
         mainWindow, nullptr, instance, nullptr
     );
 	
@@ -121,7 +123,7 @@ void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc
         WS_EX_WINDOWEDGE | WS_EX_TRANSPARENT,
         L"STATIC", (LPCWSTR)nullptr,
         WS_DLGFRAME | WS_VISIBLE | WS_CHILD,
-        10, 630, 610, 32,
+        10, 672, 610, 32,
         debugWindow, nullptr, instance, nullptr
     );
 
@@ -269,7 +271,15 @@ void DebugWindowModule::showWindow(HINSTANCE instance, HWND mainWindow, Gbc* gbc
         debugWindow, nullptr, instance, nullptr
     );
     breakReadAddrDefProc = (WNDPROC)SetWindowLongPtr(breakReadAddrComponent, GWLP_WNDPROC, (LONG_PTR)breakReadAddrWndProc);
-	
+
+    generateStackTraceButtonComponent = CreateWindow(
+        L"BUTTON", L"Generate stack trace file",
+        WS_DLGFRAME | WS_VISIBLE | WS_CHILD,
+        10, 630, 400, 32,
+        debugWindow, nullptr, instance, nullptr
+    );
+    generateStackTraceButtonDefProc = (WNDPROC)SetWindowLongPtr(generateStackTraceButtonComponent, GWLP_WNDPROC, (LONG_PTR)generateStackTraceButtonWndProc);
+
     // Fill data in text boxes
     loadROMDetails();
     loadMemoryDetails(1);
@@ -865,6 +875,18 @@ LRESULT APIENTRY DebugWindowModule::refreshButtonWndProc(HWND hWnd, UINT message
 	return CallWindowProc(refreshButtonDefProc, refreshButtonComponent, message, wParam, lParam);
 }
 
+LRESULT APIENTRY DebugWindowModule::generateStackTraceButtonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (message == WM_LBUTTONDOWN) {
+        if (gbc->isRunning || gbc->isPaused) {
+            debugger.writeStackTraceFile();
+        } else {
+            MessageBoxW(hWnd, L"Game must be running or paused to generate a stack trace", L"Action failed", MB_OK);
+        }
+        BreakCode code = gbc->isPaused ? BreakCode::NONE : BreakCode::MANUAL_PAUSE;
+    }
+    return CallWindowProc(generateStackTraceButtonDefProc, generateStackTraceButtonComponent, message, wParam, lParam);
+}
+
 LRESULT APIENTRY DebugWindowModule::dropdownWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == WM_COMMAND) {
 		if (HIWORD(wParam) == CBN_SELCHANGE) {
@@ -1026,6 +1048,14 @@ LRESULT APIENTRY DebugWindowModule::breakReadAddrWndProc(HWND hWnd, UINT message
 	}
 
 	return CallWindowProc(breakReadAddrDefProc, hWnd, message, wParam, lParam);
+}
+
+void DebugWindowModule::writeStackTraceFile() {
+    FILE* outputFile = fopen("stacktrace.txt", "w");
+    if (outputFile) {
+        debugger.utils.writeTraceFile(gbc, outputFile);
+        fclose(outputFile);
+    }
 }
 
 #endif

@@ -10,6 +10,8 @@
 #include <cstdint>
 
 class Gbc {
+    friend class DebugUtils;
+
     inline unsigned int HL();
     inline uint8_t R8_HL();
     inline void W8_HL(uint8_t byte);
