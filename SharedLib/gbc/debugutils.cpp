@@ -1,6 +1,7 @@
 #include "debugutils.h"
 #include "gbc.h"
 #include <iomanip>
+#include <queue>
 
 void DebugUtils::writeTraceFile(Gbc* gbc, FILE* file) {
 
@@ -19,7 +20,7 @@ void DebugUtils::writeTraceFile(Gbc* gbc, FILE* file) {
     stream << std::endl;
 
     // Print current ROM bank:
-    stream << "Current ROM bank: " << (gbc->bankOffset / 0x4000) << std::endl << std::endl;
+    stream << "Current ROM bank: 0x" << (gbc->bankOffset / 0x4000) << std::endl << std::endl;
 
     // Print calling stack:
     stream << "Calling stack:" << std::endl;
@@ -50,11 +51,9 @@ void DebugUtils::writeTraceFile(Gbc* gbc, FILE* file) {
     } while (cameFromKnownCall);
     stream << std::endl;
 
-    // Print a bunch of operations from this point on
-    // TODO
-
-    // Print bodies of functions encountered
-    // TODO
+    // Print a bunch of operations from this point on, and some subroutines
+    stream << "Next instructions:" << std::endl;
+    printFunctionContents(gbc, stream, gbc->cpuPc, true);
 
     // Write to file - leave closing the file up to the caller
     std::string result = stream.str();
@@ -95,8 +94,338 @@ bool DebugUtils::addressFollowsCall(Gbc* gbc, uint32_t address, uint32_t* callin
     return false;
 }
 
+bool DebugUtils::isCallOp(uint8_t opcode) {
+    // Return true for all 'call' or 'rst' operations
+    switch (opcode) {
+        case 0xcc:
+        case 0xc4:
+        case 0xcd:
+        case 0xd4:
+        case 0xdc:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool DebugUtils::isRstOp(uint8_t opcode) {
+    // Return true for all 'call' or 'rst' operations
+    switch (opcode) {
+        case 0xc7:
+        case 0xcf:
+        case 0xd7:
+        case 0xdf:
+        case 0xe7:
+        case 0xef:
+        case 0xf7:
+        case 0xff:
+            return true;
+        default:
+            return false;
+    }
+}
+
 void DebugUtils::printLinePrefix(std::ostringstream& stream, uint32_t address) {
     stream << "0x" << std::setw(4) << address << ' ';
+}
+
+void DebugUtils::printFunctionContents(Gbc* gbc, std::ostringstream& stream, uint32_t fromAddress, bool printSubFunctions) {
+
+    std::queue<uint32_t> subroutines;
+
+    int instructionsPrinted = 0;
+    bool hitReturnInstruction = false;
+    uint32_t readingAddress = fromAddress;
+    while ((instructionsPrinted < 100) && !hitReturnInstruction) {
+        uint8_t opcode = gbc->read8(readingAddress);
+        uint8_t imm1 = gbc->read8(readingAddress + 1);
+        uint8_t imm2 = gbc->read8(readingAddress + 2);
+        hitReturnInstruction = opcode == 0xc9;
+        if (printSubFunctions) {
+            if (isCallOp(opcode)) {
+                uint32_t subroutinesAddress = ((unsigned int) imm2 << 8U) + (unsigned int) imm1;
+                subroutines.push(subroutinesAddress);
+            } else if (isRstOp(opcode)) {
+                uint32_t subroutinesAddress = opcode & 0x38U;
+                subroutines.push(subroutinesAddress);
+            }
+        }
+        printLinePrefix(stream, readingAddress);
+        printOperation(stream, opcode, imm1, imm2);
+        readingAddress = getAdjustedPcFollowingOperation(readingAddress, opcode, imm1, imm2);
+        instructionsPrinted++;
+    }
+
+    if (printSubFunctions) {
+        while (!subroutines.empty()) {
+            stream << std::endl << "Subroutine:" << std::endl;
+            uint32_t nextAddress = subroutines.front();
+            subroutines.pop();
+            printFunctionContents(gbc, stream, nextAddress, false);
+        }
+    }
+}
+
+uint32_t DebugUtils::getAdjustedPcFollowingOperation(uint32_t currentPc, uint8_t opcode, uint8_t imm1, uint8_t imm2) {
+    switch (opcode) {
+        case 0x00: return currentPc + 1;
+        case 0x01: return currentPc + 3;
+        case 0x02: return currentPc + 1;
+        case 0x03: return currentPc + 1;
+        case 0x04: return currentPc + 1;
+        case 0x05: return currentPc + 1;
+        case 0x06: return currentPc + 2;
+        case 0x07: return currentPc + 1;
+        case 0x08: return currentPc + 3;
+        case 0x09: return currentPc + 1;
+        case 0x0a: return currentPc + 1;
+        case 0x0b: return currentPc + 1;
+        case 0x0c: return currentPc + 1;
+        case 0x0d: return currentPc + 1;
+        case 0x0e: return currentPc + 2;
+        case 0x0f: return currentPc + 1;
+        case 0x10: return currentPc + 1;
+        case 0x11: return currentPc + 3;
+        case 0x12: return currentPc + 1;
+        case 0x13: return currentPc + 1;
+        case 0x14: return currentPc + 1;
+        case 0x15: return currentPc + 1;
+        case 0x16: return currentPc + 2;
+        case 0x17: return currentPc + 1;
+        case 0x18: return currentPc + 2;
+        case 0x19: return currentPc + 1;
+        case 0x1a: return currentPc + 1;
+        case 0x1b: return currentPc + 1;
+        case 0x1c: return currentPc + 1;
+        case 0x1d: return currentPc + 1;
+        case 0x1e: return currentPc + 2;
+        case 0x1f: return currentPc + 1;
+        case 0x20: return currentPc + 2;
+        case 0x21: return currentPc + 3;
+        case 0x22: return currentPc + 1;
+        case 0x23: return currentPc + 1;
+        case 0x24: return currentPc + 1;
+        case 0x25: return currentPc + 1;
+        case 0x26: return currentPc + 2;
+        case 0x27: return currentPc + 1;
+        case 0x28: return currentPc + 2;
+        case 0x29: return currentPc + 1;
+        case 0x2a: return currentPc + 1;
+        case 0x2b: return currentPc + 1;
+        case 0x2c: return currentPc + 1;
+        case 0x2d: return currentPc + 1;
+        case 0x2e: return currentPc + 2;
+        case 0x2f: return currentPc + 1;
+        case 0x30: return currentPc + 2;
+        case 0x31: return currentPc + 3;
+        case 0x32: return currentPc + 1;
+        case 0x33: return currentPc + 1;
+        case 0x34: return currentPc + 1;
+        case 0x35: return currentPc + 1;
+        case 0x36: return currentPc + 2;
+        case 0x37: return currentPc + 1;
+        case 0x38: return currentPc + 2;
+        case 0x39: return currentPc + 1;
+        case 0x3a: return currentPc + 1;
+        case 0x3b: return currentPc + 1;
+        case 0x3c: return currentPc + 1;
+        case 0x3d: return currentPc + 1;
+        case 0x3e: return currentPc + 2;
+        case 0x3f: return currentPc + 1;
+        case 0x40: return currentPc + 1;
+        case 0x41: return currentPc + 1;
+        case 0x42: return currentPc + 1;
+        case 0x43: return currentPc + 1;
+        case 0x44: return currentPc + 1;
+        case 0x45: return currentPc + 1;
+        case 0x46: return currentPc + 1;
+        case 0x47: return currentPc + 1;
+        case 0x48: return currentPc + 1;
+        case 0x49: return currentPc + 1;
+        case 0x4a: return currentPc + 1;
+        case 0x4b: return currentPc + 1;
+        case 0x4c: return currentPc + 1;
+        case 0x4d: return currentPc + 1;
+        case 0x4e: return currentPc + 1;
+        case 0x4f: return currentPc + 1;
+        case 0x50: return currentPc + 1;
+        case 0x51: return currentPc + 1;
+        case 0x52: return currentPc + 1;
+        case 0x53: return currentPc + 1;
+        case 0x54: return currentPc + 1;
+        case 0x55: return currentPc + 1;
+        case 0x56: return currentPc + 1;
+        case 0x57: return currentPc + 1;
+        case 0x58: return currentPc + 1;
+        case 0x59: return currentPc + 1;
+        case 0x5a: return currentPc + 1;
+        case 0x5b: return currentPc + 1;
+        case 0x5c: return currentPc + 1;
+        case 0x5d: return currentPc + 1;
+        case 0x5e: return currentPc + 1;
+        case 0x5f: return currentPc + 1;
+        case 0x60: return currentPc + 1;
+        case 0x61: return currentPc + 1;
+        case 0x62: return currentPc + 1;
+        case 0x63: return currentPc + 1;
+        case 0x64: return currentPc + 1;
+        case 0x65: return currentPc + 1;
+        case 0x66: return currentPc + 1;
+        case 0x67: return currentPc + 1;
+        case 0x68: return currentPc + 1;
+        case 0x69: return currentPc + 1;
+        case 0x6a: return currentPc + 1;
+        case 0x6b: return currentPc + 1;
+        case 0x6c: return currentPc + 1;
+        case 0x6d: return currentPc + 1;
+        case 0x6e: return currentPc + 1;
+        case 0x6f: return currentPc + 1;
+        case 0x70: return currentPc + 1;
+        case 0x71: return currentPc + 1;
+        case 0x72: return currentPc + 1;
+        case 0x73: return currentPc + 1;
+        case 0x74: return currentPc + 1;
+        case 0x75: return currentPc + 1;
+        case 0x76: return currentPc + 1;
+        case 0x77: return currentPc + 1;
+        case 0x78: return currentPc + 1;
+        case 0x79: return currentPc + 1;
+        case 0x7a: return currentPc + 1;
+        case 0x7b: return currentPc + 1;
+        case 0x7c: return currentPc + 1;
+        case 0x7d: return currentPc + 1;
+        case 0x7e: return currentPc + 1;
+        case 0x7f: return currentPc + 1;
+        case 0x80: return currentPc + 1;
+        case 0x81: return currentPc + 1;
+        case 0x82: return currentPc + 1;
+        case 0x83: return currentPc + 1;
+        case 0x84: return currentPc + 1;
+        case 0x85: return currentPc + 1;
+        case 0x86: return currentPc + 1;
+        case 0x87: return currentPc + 1;
+        case 0x88: return currentPc + 1;
+        case 0x89: return currentPc + 1;
+        case 0x8a: return currentPc + 1;
+        case 0x8b: return currentPc + 1;
+        case 0x8c: return currentPc + 1;
+        case 0x8d: return currentPc + 1;
+        case 0x8e: return currentPc + 1;
+        case 0x8f: return currentPc + 1;
+        case 0x90: return currentPc + 1;
+        case 0x91: return currentPc + 1;
+        case 0x92: return currentPc + 1;
+        case 0x93: return currentPc + 1;
+        case 0x94: return currentPc + 1;
+        case 0x95: return currentPc + 1;
+        case 0x96: return currentPc + 1;
+        case 0x97: return currentPc + 1;
+        case 0x98: return currentPc + 1;
+        case 0x99: return currentPc + 1;
+        case 0x9a: return currentPc + 1;
+        case 0x9b: return currentPc + 1;
+        case 0x9c: return currentPc + 1;
+        case 0x9d: return currentPc + 1;
+        case 0x9e: return currentPc + 1;
+        case 0x9f: return currentPc + 1;
+        case 0xa0: return currentPc + 1;
+        case 0xa1: return currentPc + 1;
+        case 0xa2: return currentPc + 1;
+        case 0xa3: return currentPc + 1;
+        case 0xa4: return currentPc + 1;
+        case 0xa5: return currentPc + 1;
+        case 0xa6: return currentPc + 1;
+        case 0xa7: return currentPc + 1;
+        case 0xa8: return currentPc + 1;
+        case 0xa9: return currentPc + 1;
+        case 0xaa: return currentPc + 1;
+        case 0xab: return currentPc + 1;
+        case 0xac: return currentPc + 1;
+        case 0xad: return currentPc + 1;
+        case 0xae: return currentPc + 1;
+        case 0xaf: return currentPc + 1;
+        case 0xb0: return currentPc + 1;
+        case 0xb1: return currentPc + 1;
+        case 0xb2: return currentPc + 1;
+        case 0xb3: return currentPc + 1;
+        case 0xb4: return currentPc + 1;
+        case 0xb5: return currentPc + 1;
+        case 0xb6: return currentPc + 1;
+        case 0xb7: return currentPc + 1;
+        case 0xb8: return currentPc + 1;
+        case 0xb9: return currentPc + 1;
+        case 0xba: return currentPc + 1;
+        case 0xbb: return currentPc + 1;
+        case 0xbc: return currentPc + 1;
+        case 0xbd: return currentPc + 1;
+        case 0xbe: return currentPc + 1;
+        case 0xbf: return currentPc + 1;
+        case 0xc0: return currentPc + 1;
+        case 0xc1: return currentPc + 1;
+        case 0xc2: return currentPc + 3;
+        case 0xc3: return ((unsigned int)imm2 << 8U) + (unsigned int)imm1;
+        case 0xc4: return currentPc + 3;
+        case 0xc5: return currentPc + 1;
+        case 0xc6: return currentPc + 2;
+        case 0xc7: return currentPc + 1;
+        case 0xc8: return currentPc + 1;
+        case 0xc9: return currentPc + 1;
+        case 0xca: return currentPc + 3;
+        case 0xcb: return currentPc + 2;
+        case 0xcc: return currentPc + 3;
+        case 0xcd: return currentPc + 3;
+        case 0xce: return currentPc + 2;
+        case 0xcf: return currentPc + 1;
+        case 0xd0: return currentPc + 1;
+        case 0xd1: return currentPc + 1;
+        case 0xd2: return currentPc + 3;
+        case 0xd3: return currentPc + 1;
+        case 0xd4: return currentPc + 3;
+        case 0xd5: return currentPc + 1;
+        case 0xd6: return currentPc + 2;
+        case 0xd7: return currentPc + 1;
+        case 0xd8: return currentPc + 1;
+        case 0xd9: return currentPc + 1;
+        case 0xda: return currentPc + 3;
+        case 0xdb: return currentPc + 1;
+        case 0xdc: return currentPc + 3;
+        case 0xdd: return currentPc + 1;
+        case 0xde: return currentPc + 2;
+        case 0xdf: return currentPc + 1;
+        case 0xe0: return currentPc + 2;
+        case 0xe1: return currentPc + 1;
+        case 0xe2: return currentPc + 1;
+        case 0xe3: return currentPc + 1;
+        case 0xe4: return currentPc + 1;
+        case 0xe5: return currentPc + 1;
+        case 0xe6: return currentPc + 2;
+        case 0xe7: return currentPc + 1;
+        case 0xe8: return currentPc + 2;
+        case 0xe9: return currentPc + 1;
+        case 0xea: return currentPc + 3;
+        case 0xeb: return currentPc + 1;
+        case 0xec: return currentPc + 1;
+        case 0xed: return currentPc + 1;
+        case 0xee: return currentPc + 2;
+        case 0xef: return currentPc + 1;
+        case 0xf0: return currentPc + 2;
+        case 0xf1: return currentPc + 1;
+        case 0xf2: return currentPc + 1;
+        case 0xf3: return currentPc + 1;
+        case 0xf4: return currentPc + 1;
+        case 0xf5: return currentPc + 1;
+        case 0xf6: return currentPc + 2;
+        case 0xf7: return currentPc + 1;
+        case 0xf8: return currentPc + 2;
+        case 0xf9: return currentPc + 1;
+        case 0xfa: return currentPc + 3;
+        case 0xfb: return currentPc + 1;
+        case 0xfc: return currentPc + 1;
+        case 0xfd: return currentPc + 1;
+        case 0xfe: return currentPc + 2;
+        case 0xff: return currentPc + 1;
+    }
+    return 0;
 }
 
 void DebugUtils::printOperation(std::ostringstream& stream, uint8_t opcode, uint8_t imm1, uint8_t imm2) {
