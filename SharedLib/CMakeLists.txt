@@ -25,6 +25,7 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         gbc/framemanager.cpp
         gbc/sgbmodule.cpp
         gbc/sram.cpp
-        renderconfig.cpp)
+        renderconfig.cpp
+        gbcapp/gbcui.cpp)
 
 target_include_directories(SharedLib PRIVATE ../lib)

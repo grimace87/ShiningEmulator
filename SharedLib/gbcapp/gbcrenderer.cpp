@@ -14,6 +14,7 @@
 #include "../platformrenderer.h"
 #include "../uielements.h"
 #include "../shader.h"
+#include "gbcui.h"
 
 GbcRenderer::GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* gbc) :
         Renderer(appPlatform, platformRenderer), gbc(gbc), windowTextureHandle(0) {
@@ -58,8 +59,8 @@ bool GbcRenderer::initObject() {
     platformRenderer->verifyNoError();
 
     // Create shaders
-    TextureShader* mainShader = new TextureShader(*appPlatform, *platformRenderer);
-    FontShader* fontShader = new FontShader(*appPlatform, *platformRenderer);
+    auto mainShader = new TextureShader(*appPlatform, *platformRenderer);
+    auto fontShader = new FontShader(*appPlatform, *platformRenderer);
 
     platformRenderer->verifyNoError();
 
@@ -82,59 +83,9 @@ bool GbcRenderer::initObject() {
     buttonOutlinesVbo = platformRenderer->createVbo(&buttonFloats.front(), floatsForButtonOutlines);
     buttonLabelsVbo = platformRenderer->createVbo(&buttonFloats.front() + floatsForButtonOutlines, floatsForButtonLabels);
 
-    // Get ready to adjust for screen orientation
+    // Fill vector of gameplay button images
     bool wide = platformRenderer->canvasWidth > platformRenderer->canvasHeight;
-    float lowMargin = wide ? 0.0F : 0.15F;
-    float sideButtonLowMargin = wide ? 0.0F : 0.15F;
-    float sideMargin = wide ? 0.1F : 0.0F;
-
-    // Create gameplay buttons
-    buttonSize = { 0.75f, 0.75f };
-    buttonMargins = { 0.125f, 0.0f, 0.0f, 0.1875f + lowMargin + sideButtonLowMargin };
-    buttonBgTextureBounds = { 0.375f, 0.375f, 0.5f, 0.5f };
-    auto dpadImage = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::START);
-    buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.5f + sideMargin, 0.3125f + lowMargin + sideButtonLowMargin };
-    buttonBgTextureBounds = { 0.875f, 0.25f, 1.0f, 0.375f };
-    auto bButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
-    buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.5f + sideMargin, 0.3125f + lowMargin + sideButtonLowMargin };
-    buttonBgTextureBounds = { 0.625f, 0.375f, 0.75f, 0.5f };
-    auto bButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
-    buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.125f + sideMargin, 0.1875f + lowMargin + sideButtonLowMargin };
-    buttonBgTextureBounds = { 0.875f, 0.25f, 1.0f, 0.375f };
-    auto aButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
-    buttonSize = { 0.375f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.125f + sideMargin, 0.1875f + lowMargin + sideButtonLowMargin };
-    buttonBgTextureBounds = { 0.5f, 0.375f, 0.625f, 0.5f };
-    auto aButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::END);
-    buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.1875f, 0.125f + lowMargin };
-    buttonBgTextureBounds = { 0.875f, 0.375f, 1.0f, 0.4375f };
-    auto selectButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
-    buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.0f, 0.0f, 0.1875f, 0.125f + lowMargin };
-    buttonBgTextureBounds = { 0.75f, 0.375f, 0.875f, 0.4375f };
-    auto selectButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
-    buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.1875f, 0.0f, 0.0f, 0.125f + lowMargin };
-    buttonBgTextureBounds = { 0.875f, 0.375f, 1.0f, 0.4375f };
-    auto startButtonBackground = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
-    buttonSize = { 0.1875f, 0.375f };
-    buttonMargins = { 0.1875f, 0.0f, 0.0f, 0.125f + lowMargin };
-    buttonBgTextureBounds = { 0.75f, 0.4375f, 0.875f, 0.5f };
-    auto startButton = Image(mainTexture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::END, Gravity::MIDDLE);
-
-    this->gameplayButtons.push_back(dpadImage);
-    this->gameplayButtons.push_back(bButtonBackground);
-    this->gameplayButtons.push_back(bButton);
-    this->gameplayButtons.push_back(aButtonBackground);
-    this->gameplayButtons.push_back(aButton);
-    this->gameplayButtons.push_back(selectButtonBackground);
-    this->gameplayButtons.push_back(selectButton);
-    this->gameplayButtons.push_back(startButtonBackground);
-    this->gameplayButtons.push_back(startButton);
+    GbcUi::populateGameplayButtonsVector(this->gameplayButtons, wide, (int)mainTexture);
 
     // Generate float buffer for gameplay buttons
     int width;
@@ -246,11 +197,11 @@ void GbcRenderer::doWork() {
                 configCount = 1;
                 auto& windowConfig = frameConfigs[FCT::GAME_WINDOW];
                 TextureShader::prepareConfig(windowConfig.renderConfigs[RCT::GAME_WINDOW], 0, glm::value_ptr(mainMvpMatrix));
-                if (appPlatform->usesTouch) {
+                //if (appPlatform->usesTouch) {
                     auto &hudConfig = frameConfigs[FCT::GAME_HUD];
                     TextureShader::prepareConfig(hudConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
                     configCount++;
-                }
+                //}
 
                 framePrepared = true;
             }

@@ -722,6 +722,7 @@ void DebugWindowModule::loadMemoryDetails(int statusChanged) {
 		text << "\r\nPC " << gbc->cpuPc;
 		text << "\r\nSP " << gbc->cpuSp;
 		text << "\r\nROM bank " << (gbc->bankOffset / 0x4000U);
+		text << "\r\nInterrupt master enable: " << gbc->cpuIme;
 		text << "\r\n\r\nBG color palettes (8x4xRGB):\r\n";
 		for (line = 0; line < 8; line++) {
 			text << " " << line << ": ";

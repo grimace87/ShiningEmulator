@@ -49,7 +49,6 @@ class Gbc {
     int gpuClockFactor;
     int gpuTimeInMode;
     int gpuMode{};
-    bool cpuIme{};
     int cpuMode;
     unsigned int cpuDividerCount;
     unsigned int cpuTimerCount{};
@@ -126,6 +125,7 @@ public:
     uint8_t cpuE;
     uint8_t cpuH;
     uint8_t cpuL;
+    bool cpuIme;
 
     // Public members
     bool isRunning;
@@ -134,6 +134,7 @@ public:
     bool keyStateChanged{};
     int clockMultiply;
     int clockDivide;
+    int currentClockMultiplierCombo;
 
     // Constructor/deconstructor
     Gbc();
@@ -142,4 +143,6 @@ public:
     // Other public functions
     bool loadRom(std::string fileName, const uint8_t* data, int dataLength, AppPlatform& appPlatform);
     void reset();
+    void speedUp();
+    void slowDown();
 };

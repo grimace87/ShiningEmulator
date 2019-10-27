@@ -4,11 +4,11 @@
 #include "gbcappstate.h"
 #include "gbcrenderer.h"
 #include "../uidefs.h"
-#include "../uielements.h"
 #include "../gbc/gbc.h"
 #include "../resource.h"
 #include "../appplatform.h"
 #include "../messagedefs.h"
+#include "gbcui.h"
 
 GbcAppState persistentState;
 Gbc gbc;
@@ -193,11 +193,13 @@ void GbcApp::doWork() {
         }
         else if (mode == AppMode::PLAYING) {
             auto renderer = (GbcRenderer*)this->renderer;
-            auto& dpadButton = renderer->gameplayButtons[0];
-            auto& bButton = renderer->gameplayButtons[1];
-            auto& aButton = renderer->gameplayButtons[3];
-            auto& selectButton = renderer->gameplayButtons[5];
-            auto& startButton = renderer->gameplayButtons[7];
+            auto& dpadButton = renderer->gameplayButtons[BTN_INDEX_DPAD];
+            auto& bButton = renderer->gameplayButtons[BTN_INDEX_B];
+            auto& aButton = renderer->gameplayButtons[BTN_INDEX_A];
+            auto& selectButton = renderer->gameplayButtons[BTN_INDEX_SELECT];
+            auto& startButton = renderer->gameplayButtons[BTN_INDEX_START];
+            auto& slowerButton = renderer->gameplayButtons[BTN_INDEX_SLOWER];
+            auto& fasterButton = renderer->gameplayButtons[BTN_INDEX_FASTER];
             if (dpadButton.containsCoords(downXUnits, downYUnits)) {
                 auto compassMask = dpadButton.compassFromCentre(currentXUnits, currentYUnits);
                 if (compassMask & (unsigned int)CompassMask::NORTH) {
@@ -226,6 +228,10 @@ void GbcApp::doWork() {
                 gbcKeys.pressSelect();
             } else if (startButton.containsCoords(downXUnits, downYUnits)) {
                 gbcKeys.pressStart();
+            } else if (slowerButton.containsCoords(downXUnits, downYUnits)) {
+                gbc.slowDown();
+            } else if (fasterButton.containsCoords(downXUnits, downYUnits)) {
+                gbc.speedUp();
             }
         }
         cursor.downHandled = true;

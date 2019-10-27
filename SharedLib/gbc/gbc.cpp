@@ -17,6 +17,10 @@ uint32_t stockPaletteBg[4] = { 0xffffffffU, 0xff88b0b0U, 0xff507878U, 0xff000000
 uint32_t stockPaletteObj1[4] = { 0xffffffffU, 0xff5050f0U, 0xff2020a0U, 0xff000000U };
 uint32_t stockPaletteObj2[4] = { 0xffffffffU, 0xffa0a0a0U, 0xff404040U, 0xff000000U };
 
+constexpr int MULTIPLIER_ARRAY_SIZE = 21;
+constexpr int CLOCK_MULTIPLIERS[MULTIPLIER_ARRAY_SIZE] = { 1,  1,  1, 1, 1,  2, 1, 4, 2, 4,  1,  5, 3, 7, 2, 5,  3, 5, 8, 12, 20 };
+constexpr int CLOCK_DIVISORS[MULTIPLIER_ARRAY_SIZE] =    { 20, 12, 8, 5, 3,  5, 2, 7, 3, 5,  1,  4, 2, 4, 1, 2,  1, 1, 1, 1,  1  };
+
 #define CPU_RUNNING   0x00U
 #define CPU_HALTED    0x01U
 #define CPU_STOPPED   0x02U
@@ -57,6 +61,7 @@ Gbc::Gbc() {
     romProperties.valid = false;
     clockMultiply = 1;
     clockDivide = 1;
+    currentClockMultiplierCombo = 10;
 
     // Allocate emulated RAM
     rom = new uint8_t[256 * 16384];
@@ -384,6 +389,11 @@ void Gbc::reset() {
         return;
     }
 
+    // Reset clock multipliers
+    currentClockMultiplierCombo = 10;
+    clockMultiply = 1;
+    clockDivide = 1;
+
     // Initialise control variables
     cpuIme = false;
     cpuMode = CPU_RUNNING;
@@ -502,6 +512,22 @@ void Gbc::reset() {
 
     isRunning = true;
     isPaused = false;
+}
+
+void Gbc::speedUp() {
+    if (currentClockMultiplierCombo < 20) {
+        currentClockMultiplierCombo++;
+        clockMultiply = CLOCK_MULTIPLIERS[currentClockMultiplierCombo];
+        clockDivide = CLOCK_DIVISORS[currentClockMultiplierCombo];
+    }
+}
+
+void Gbc::slowDown() {
+    if (currentClockMultiplierCombo > 0) {
+        currentClockMultiplierCombo--;
+        clockMultiply = CLOCK_MULTIPLIERS[currentClockMultiplierCombo];
+        clockDivide = CLOCK_DIVISORS[currentClockMultiplierCombo];
+    }
 }
 
 // Run emulation - accept number of clocks needing to run as an argument,
