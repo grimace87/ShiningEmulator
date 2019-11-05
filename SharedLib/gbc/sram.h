@@ -6,17 +6,17 @@
 class AppPlatform;
 
 class Sram {
-    FILE* sramFile = nullptr;
 public:
-    unsigned char* data;
+    FILE* sramFile = nullptr;
+    uint8_t* data;
     bool hasBattery = false;
     bool hasTimer = false;
     unsigned char timerData[5] = { '\0', '\0', '\0', '\0', '\0' };
-    unsigned int timerMode = 0;
-    unsigned int timerLatch = 0;
-    unsigned int bankOffset = 0;
-    unsigned char sizeEnum = '\0';
-    long sizeBytes = 0L;
+    uint32_t timerMode = 0;
+    uint32_t timerLatch = 0;
+    uint32_t bankOffset = 0;
+    uint8_t sizeEnum = '\0';
+    uint32_t sizeBytes = 0;
     unsigned char bankSelectMask = '\0';
     bool enableFlag = false;
 

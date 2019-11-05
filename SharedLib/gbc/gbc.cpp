@@ -71,9 +71,9 @@ Gbc::Gbc() {
     tileSet = new uint32_t[2 * 384 * 8 * 8]; // 2 VRAM banks, 384 tiles, 8 rows, 8 pixels per row
     sgb.monoData = new uint32_t[160 * 152];
     sgb.mappedVramForTrnOp = new uint8_t[4096];
-    sgb.palettes = new unsigned int[4 * 4];
-    sgb.sysPalettes = new unsigned int[512 * 4]; // 512 palettes, 4 colours per palette, RGB
-    sgb.chrPalettes = new unsigned int[18 * 20];
+    sgb.palettes = new uint32_t[4 * 4];
+    sgb.sysPalettes = new uint32_t[512 * 4]; // 512 palettes, 4 colours per palette, RGB
+    sgb.chrPalettes = new uint32_t[18 * 20];
 
     // Clear things that should be cleared
     std::fill(tileSet, tileSet + 2 * 384 * 8 * 8, 0);
@@ -109,7 +109,7 @@ int Gbc::runInvalidInstruction(uint8_t instruction) {
 void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
     if (isRunning && !isPaused) {
         // Determine how many clock cycles to emulate, cap at 1000000 (about a quarter of a second)
-        const int adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
+        const int64_t adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
         clocksAcc += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
         if (clocksAcc > 1000000) {
             clocksAcc = 1000000;
@@ -512,22 +512,6 @@ void Gbc::reset() {
 
     isRunning = true;
     isPaused = false;
-}
-
-void Gbc::speedUp() {
-    if (currentClockMultiplierCombo < 20) {
-        currentClockMultiplierCombo++;
-        clockMultiply = CLOCK_MULTIPLIERS[currentClockMultiplierCombo];
-        clockDivide = CLOCK_DIVISORS[currentClockMultiplierCombo];
-    }
-}
-
-void Gbc::slowDown() {
-    if (currentClockMultiplierCombo > 0) {
-        currentClockMultiplierCombo--;
-        clockMultiply = CLOCK_MULTIPLIERS[currentClockMultiplierCombo];
-        clockDivide = CLOCK_DIVISORS[currentClockMultiplierCombo];
-    }
 }
 
 // Run emulation - accept number of clocks needing to run as an argument,
@@ -6062,4 +6046,174 @@ int Gbc::performOp() {
             return 16;
     }
     return 0;
+}
+
+
+void Gbc::speedUp() {
+    if (currentClockMultiplierCombo < 20) {
+        currentClockMultiplierCombo++;
+        clockMultiply = CLOCK_MULTIPLIERS[currentClockMultiplierCombo];
+        clockDivide = CLOCK_DIVISORS[currentClockMultiplierCombo];
+    }
+}
+
+void Gbc::slowDown() {
+    if (currentClockMultiplierCombo > 0) {
+        currentClockMultiplierCombo--;
+        clockMultiply = CLOCK_MULTIPLIERS[currentClockMultiplierCombo];
+        clockDivide = CLOCK_DIVISORS[currentClockMultiplierCombo];
+    }
+}
+
+void Gbc::loadSaveState(FILE* file) {
+    // Preserve the pointers to heap memory that are contained in SgbModule and Sram
+    uint32_t* sgbMonoData = this->sgb.monoData;
+    uint8_t* sgbMappedVramForTrnOp = this->sgb.mappedVramForTrnOp;
+    uint32_t* sgbPalettes = this->sgb.palettes;
+    uint32_t* sgbSysPalettes = this->sgb.sysPalettes;
+    uint32_t* sgbChrPalettes = this->sgb.chrPalettes;
+    FILE* sramFile = this->sram.sramFile;
+    uint8_t* sramData = this->sram.data;
+
+    fread(&this->cpuPc, sizeof(uint32_t), 1, file);
+    fread(&this->cpuSp, sizeof(uint32_t), 1, file);
+    fread(&this->cpuA, sizeof(uint8_t), 1, file);
+    fread(&this->cpuB, sizeof(uint8_t), 1, file);
+    fread(&this->cpuC, sizeof(uint8_t), 1, file);
+    fread(&this->cpuD, sizeof(uint8_t), 1, file);
+    fread(&this->cpuE, sizeof(uint8_t), 1, file);
+    fread(&this->cpuF, sizeof(uint8_t), 1, file);
+    fread(&this->cpuH, sizeof(uint8_t), 1, file);
+    fread(&this->cpuL, sizeof(uint8_t), 1, file);
+    fread(&this->cpuIme, sizeof(bool), 1, file);
+    fread(&this->clocksAcc, sizeof(int32_t), 1, file);
+    fread(&this->cpuClockFreq, sizeof(int64_t), 1, file);
+    fread(&this->cpuDividerCount, sizeof(uint32_t), 1, file);
+    fread(&this->cpuTimerCount, sizeof(uint32_t), 1, file);
+    fread(&this->cpuTimerIncTime, sizeof(uint32_t), 1, file);
+    fread(&this->cpuTimerRunning, sizeof(bool), 1, file);
+    fread(&this->serialRequest, sizeof(bool), 1, file);
+    fread(&this->serialIsTransferring, sizeof(bool), 1, file);
+    fread(&this->serialClockIsExternal, sizeof(bool), 1, file);
+    fread(&this->serialTimer, sizeof(int32_t), 1, file);
+    fread(&this->gpuClockFactor, sizeof(int32_t), 1, file);
+    fread(&this->gpuTimeInMode, sizeof(int32_t), 1, file);
+    fread(&this->blankedScreen, sizeof(bool), 1, file);
+    fread(&this->needClear, sizeof(bool), 1, file);
+    fread(&this->cpuMode, sizeof(uint32_t), 1, file);
+    fread(&this->gpuMode, sizeof(uint32_t), 1, file);
+    fread(&this->isRunning, sizeof(bool), 1, file);
+    fread(&this->isPaused, sizeof(bool), 1, file);
+    fread(&this->accessOam, sizeof(bool), 1, file);
+    fread(&this->accessVram, sizeof(bool), 1, file);
+    fread(&this->romProperties, sizeof(RomProperties), 1, file);
+    fread(&this->clockMultiply, sizeof(int64_t), 1, file);
+    fread(&this->clockDivide, sizeof(int64_t), 1, file);
+    fread(&this->currentClockMultiplierCombo, sizeof(int32_t), 1, file);
+    fread(&this->bankOffset, sizeof(uint32_t), 1, file);
+    fread(&this->wramBankOffset, sizeof(uint32_t), 1, file);
+    fread(&this->vramBankOffset, sizeof(uint32_t), 1, file);
+    fread(this->wram, sizeof(uint8_t), 4 * 4096, file);
+    fread(this->vram, sizeof(uint8_t), 2 * 8192, file);
+    fread(this->ioPorts, sizeof(uint8_t), 256, file);
+    fread(this->oam, sizeof(uint8_t), 160, file);
+    fread(this->tileSet, sizeof(uint32_t), 2 * 384 * 8 * 8, file);
+    fread(&this->sgb, sizeof(SgbModule), 1, file);
+    this->sgb.monoData = sgbMonoData;
+    this->sgb.mappedVramForTrnOp = sgbMappedVramForTrnOp;
+    this->sgb.palettes = sgbPalettes;
+    this->sgb.sysPalettes = sgbSysPalettes;
+    this->sgb.chrPalettes = sgbChrPalettes;
+    fread(this->sgb.monoData, sizeof(uint32_t), 160 * 152, file);
+    fread(this->sgb.mappedVramForTrnOp, sizeof(uint8_t), 4096, file);
+    fread(this->sgb.palettes, sizeof(uint32_t), 4 * 4, file);
+    fread(this->sgb.sysPalettes, sizeof(uint32_t), 512 * 4, file);
+    fread(this->sgb.chrPalettes, sizeof(uint32_t), 18 * 20, file);
+    fread(this->translatedPaletteBg, sizeof(uint32_t), 4, file);
+    fread(this->translatedPaletteObj, sizeof(uint32_t), 8, file);
+    fread(this->sgbPaletteTranslationBg, sizeof(uint32_t), 4, file);
+    fread(this->sgbPaletteTranslationObj, sizeof(uint32_t), 8, file);
+    fread(this->cgbBgPalData, sizeof(uint8_t), 64, file);
+    fread(&this->cgbBgPalIndex, sizeof(uint32_t), 1, file);
+    fread(&this->cgbBgPalIncr, sizeof(uint32_t), 1, file);
+    fread(this->cgbBgPalette, sizeof(uint32_t), 32, file);
+    fread(this->cgbObjPalData, sizeof(uint8_t), 64, file);
+    fread(&this->cgbObjPalIndex, sizeof(uint32_t), 1, file);
+    fread(&this->cgbObjPalIncr, sizeof(uint32_t), 1, file);
+    fread(this->cgbObjPalette, sizeof(uint32_t), 32, file);
+    fread(&this->lastLYCompare, sizeof(uint32_t), 1, file);
+    fread(&this->sram, sizeof(Sram), 1, file);
+    fread(&this->keys, sizeof(InputSet), 1, file);
+    fread(&this->keyStateChanged, sizeof(bool), 1, file);
+
+    this->sram.sramFile = sramFile;
+    this->sram.data = sramData;
+}
+
+void Gbc::saveSaveState(FILE* file) {
+    fwrite(&this->cpuPc, sizeof(uint32_t), 1, file);
+    fwrite(&this->cpuSp, sizeof(uint32_t), 1, file);
+    fwrite(&this->cpuA, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuB, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuC, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuD, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuE, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuF, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuH, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuL, sizeof(uint8_t), 1, file);
+    fwrite(&this->cpuIme, sizeof(bool), 1, file);
+    fwrite(&this->clocksAcc, sizeof(int32_t), 1, file);
+    fwrite(&this->cpuClockFreq, sizeof(int64_t), 1, file);
+    fwrite(&this->cpuDividerCount, sizeof(uint32_t), 1, file);
+    fwrite(&this->cpuTimerCount, sizeof(uint32_t), 1, file);
+    fwrite(&this->cpuTimerIncTime, sizeof(uint32_t), 1, file);
+    fwrite(&this->cpuTimerRunning, sizeof(bool), 1, file);
+    fwrite(&this->serialRequest, sizeof(bool), 1, file);
+    fwrite(&this->serialIsTransferring, sizeof(bool), 1, file);
+    fwrite(&this->serialClockIsExternal, sizeof(bool), 1, file);
+    fwrite(&this->serialTimer, sizeof(int32_t), 1, file);
+    fwrite(&this->gpuClockFactor, sizeof(int32_t), 1, file);
+    fwrite(&this->gpuTimeInMode, sizeof(int32_t), 1, file);
+    fwrite(&this->blankedScreen, sizeof(bool), 1, file);
+    fwrite(&this->needClear, sizeof(bool), 1, file);
+    fwrite(&this->cpuMode, sizeof(uint32_t), 1, file);
+    fwrite(&this->gpuMode, sizeof(uint32_t), 1, file);
+    fwrite(&this->isRunning, sizeof(bool), 1, file);
+    fwrite(&this->isPaused, sizeof(bool), 1, file);
+    fwrite(&this->accessOam, sizeof(bool), 1, file);
+    fwrite(&this->accessVram, sizeof(bool), 1, file);
+    fwrite(&this->romProperties, sizeof(RomProperties), 1, file);
+    fwrite(&this->clockMultiply, sizeof(int64_t), 1, file);
+    fwrite(&this->clockDivide, sizeof(int64_t), 1, file);
+    fwrite(&this->currentClockMultiplierCombo, sizeof(int32_t), 1, file);
+    fwrite(&this->bankOffset, sizeof(uint32_t), 1, file);
+    fwrite(&this->wramBankOffset, sizeof(uint32_t), 1, file);
+    fwrite(&this->vramBankOffset, sizeof(uint32_t), 1, file);
+    fwrite(this->wram, sizeof(uint8_t), 4 * 4096, file);
+    fwrite(this->vram, sizeof(uint8_t), 2 * 8192, file);
+    fwrite(this->ioPorts, sizeof(uint8_t), 256, file);
+    fwrite(this->oam, sizeof(uint8_t), 160, file);
+    fwrite(this->tileSet, sizeof(uint32_t), 2 * 384 * 8 * 8, file);
+    fwrite(&this->sgb, sizeof(SgbModule), 1, file);
+    fwrite(this->sgb.monoData, sizeof(uint32_t), 160 * 152, file);
+    fwrite(this->sgb.mappedVramForTrnOp, sizeof(uint8_t), 4096, file);
+    fwrite(this->sgb.palettes, sizeof(uint32_t), 4 * 4, file);
+    fwrite(this->sgb.sysPalettes, sizeof(uint32_t), 512 * 4, file);
+    fwrite(this->sgb.chrPalettes, sizeof(uint32_t), 18 * 20, file);
+    fwrite(this->translatedPaletteBg, sizeof(uint32_t), 4, file);
+    fwrite(this->translatedPaletteObj, sizeof(uint32_t), 8, file);
+    fwrite(this->sgbPaletteTranslationBg, sizeof(uint32_t), 4, file);
+    fwrite(this->sgbPaletteTranslationObj, sizeof(uint32_t), 8, file);
+    fwrite(this->cgbBgPalData, sizeof(uint8_t), 64, file);
+    fwrite(&this->cgbBgPalIndex, sizeof(uint32_t), 1, file);
+    fwrite(&this->cgbBgPalIncr, sizeof(uint32_t), 1, file);
+    fwrite(this->cgbBgPalette, sizeof(uint32_t), 32, file);
+    fwrite(this->cgbObjPalData, sizeof(uint8_t), 64, file);
+    fwrite(&this->cgbObjPalIndex, sizeof(uint32_t), 1, file);
+    fwrite(&this->cgbObjPalIncr, sizeof(uint32_t), 1, file);
+    fwrite(this->cgbObjPalette, sizeof(uint32_t), 32, file);
+    fwrite(&this->lastLYCompare, sizeof(uint32_t), 1, file);
+    fwrite(&this->sram, sizeof(Sram), 1, file);
+    fwrite(&this->keys, sizeof(InputSet), 1, file);
+    fwrite(&this->keyStateChanged, sizeof(bool), 1, file);
 }

@@ -44,42 +44,42 @@ class Gbc {
     uint32_t sgbPaletteTranslationObj[8]{};
 
     // CPU stats
-    int clocksAcc;
-    int cpuClockFreq;
-    int gpuClockFactor;
-    int gpuTimeInMode;
-    int gpuMode{};
-    int cpuMode;
-    unsigned int cpuDividerCount;
-    unsigned int cpuTimerCount{};
-    unsigned cpuTimerIncTime{};
+    int32_t clocksAcc;
+    int64_t cpuClockFreq;
+    int32_t gpuClockFactor;
+    int32_t gpuTimeInMode;
+    uint32_t gpuMode{};
+    uint32_t cpuMode;
+    uint32_t cpuDividerCount;
+    uint32_t cpuTimerCount{};
+    uint32_t cpuTimerIncTime{};
     bool cpuTimerRunning{};
     bool serialRequest{};
     bool serialIsTransferring{};
     bool serialClockIsExternal{};
-    int serialTimer{};
+    int32_t serialTimer{};
 
     // RAM stats
     bool accessOam{};
-    unsigned int wramBankOffset{};
+    uint32_t wramBankOffset{};
 
     // VRAM stats
     bool accessVram{};
-    unsigned int vramBankOffset{};
+    uint32_t vramBankOffset{};
 
     // CGB stats
     uint8_t cgbBgPalData[64]{};
-    unsigned int cgbBgPalIndex{};
-    unsigned int cgbBgPalIncr{};
+    uint32_t cgbBgPalIndex{};
+    uint32_t cgbBgPalIncr{};
     uint8_t cgbObjPalData[64]{};
-    unsigned int cgbObjPalIndex{};
-    unsigned int cgbObjPalIncr{};
+    uint32_t cgbObjPalIndex{};
+    uint32_t cgbObjPalIncr{};
 
     // Block memory
     uint32_t* tileSet;
 
     // Other variables
-    unsigned int lastLYCompare{};
+    uint32_t lastLYCompare{};
     bool blankedScreen;
     bool needClear;
 
@@ -108,7 +108,7 @@ public:
 
     // ROM stats
     RomProperties romProperties{};
-	unsigned int bankOffset{};
+	uint32_t bankOffset{};
 
     // SRAM and SGB
     Sram sram;
@@ -132,9 +132,9 @@ public:
     bool isPaused;
     InputSet keys{};
     bool keyStateChanged{};
-    int clockMultiply;
-    int clockDivide;
-    int currentClockMultiplierCombo;
+    int64_t clockMultiply;
+    int64_t clockDivide;
+    int32_t currentClockMultiplierCombo;
 
     // Constructor/deconstructor
     Gbc();
@@ -145,4 +145,6 @@ public:
     void reset();
     void speedUp();
     void slowDown();
+    void loadSaveState(FILE* file);
+    void saveSaveState(FILE* file);
 };

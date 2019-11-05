@@ -200,6 +200,8 @@ void GbcApp::doWork() {
             auto& startButton = renderer->gameplayButtons[BTN_INDEX_START];
             auto& slowerButton = renderer->gameplayButtons[BTN_INDEX_SLOWER];
             auto& fasterButton = renderer->gameplayButtons[BTN_INDEX_FASTER];
+            auto& loadSaveStateButton = renderer->gameplayButtons[BTN_INDEX_LOAD_SS];
+            auto& saveSaveStateButton = renderer->gameplayButtons[BTN_INDEX_SAVE_SS];
             if (dpadButton.containsCoords(downXUnits, downYUnits)) {
                 auto compassMask = dpadButton.compassFromCentre(currentXUnits, currentYUnits);
                 if (compassMask & (unsigned int)CompassMask::NORTH) {
@@ -232,6 +234,22 @@ void GbcApp::doWork() {
                 gbc.slowDown();
             } else if (fasterButton.containsCoords(downXUnits, downYUnits)) {
                 gbc.speedUp();
+            } else if (loadSaveStateButton.containsCoords(downXUnits, downYUnits)) {
+                if (!cursor.downHandled) {
+                    auto file = platform.openFileInAppDir("temp.gss", "rb");
+                    if (file) {
+                        gbc.loadSaveState(file);
+                        fclose(file);
+                    }
+                }
+            } else if (saveSaveStateButton.containsCoords(downXUnits, downYUnits)) {
+                if (!cursor.downHandled) {
+                    auto file = platform.openFileInAppDir("temp.gss", "wb");
+                    if (file) {
+                        gbc.saveSaveState(file);
+                        fclose(file);
+                    }
+                }
             }
         }
         cursor.downHandled = true;

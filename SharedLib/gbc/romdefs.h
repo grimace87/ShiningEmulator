@@ -13,12 +13,12 @@
 struct RomProperties {
     bool valid;
     char title[17];
-    unsigned int mbc;
+    uint32_t mbc;
     bool cgbFlag;
     bool sgbFlag;
     bool hasSram;
     bool hasRumble;
-    long sizeBytes;
+    int32_t sizeBytes;
     uint32_t bankSelectMask;
 
     uint32_t mbcMode;

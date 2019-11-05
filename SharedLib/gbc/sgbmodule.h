@@ -9,24 +9,24 @@ class SgbModule {
 
 public:
     bool readingCommand;
-    unsigned int commandBytes[7][16];
-    unsigned char commandBits[8];
-    unsigned int command;
-    int readCommandBits;
-    int readCommandBytes;
+    uint32_t commandBytes[7][16];
+    uint8_t commandBits[8];
+    uint32_t command;
+    int32_t readCommandBits;
+    int32_t readCommandBytes;
     bool freezeScreen;
-    unsigned int freezeMode;
+    uint32_t freezeMode;
     bool multEnabled;
-    unsigned int noPlayers;
-    unsigned int noPacketsSent;
-    unsigned int noPacketsToSend;
-    unsigned int readJoypadID;
-    unsigned int* chrPalettes;
+    uint32_t noPlayers;
+    uint32_t noPacketsSent;
+    uint32_t noPacketsToSend;
+    uint32_t readJoypadID;
 
     uint32_t* monoData;
-    unsigned char* mappedVramForTrnOp;
+    uint8_t* mappedVramForTrnOp;
     uint32_t* palettes;
     uint32_t* sysPalettes;
+    uint32_t* chrPalettes;
 
     void checkByte();
     void checkPackets(Gbc* ggbc);

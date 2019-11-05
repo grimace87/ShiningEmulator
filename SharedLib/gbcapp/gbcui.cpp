@@ -54,6 +54,14 @@ void GbcUi::populateGameplayButtonsVector(std::vector<Image>& buttons, bool wide
     buttonMargins = { 0.3125f, widescreen ? 0.125f : 0.25f, 0.0f, 0.0f };
     buttonBgTextureBounds = { 0.0f, 0.5f, 0.125f, 0.625f };
     auto fasterButton = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::START);
+    buttonSize = { 0.125f, 0.125f };
+    buttonMargins = { 0.0f, widescreen ? 0.125f : 0.25f, 0.3125f, 0.0f };
+    buttonBgTextureBounds = { 0.25f, 0.5f, 0.375f, 0.625f };
+    auto loadSaveStateButton = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::END);
+    buttonSize = { 0.125f, 0.125f };
+    buttonMargins = { 0.0f, widescreen ? 0.125f : 0.25f, 0.125f, 0.0f };
+    buttonBgTextureBounds = { 0.375f, 0.5f, 0.5f, 0.625f };
+    auto saveSaveStateButton = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::END);
 
     // Copy these buttons into the supplied list
     buttons.clear();
@@ -68,4 +76,6 @@ void GbcUi::populateGameplayButtonsVector(std::vector<Image>& buttons, bool wide
     buttons.push_back(startButton);
     buttons.push_back(slowerButton);
     buttons.push_back(fasterButton);
+    buttons.push_back(loadSaveStateButton);
+    buttons.push_back(saveSaveStateButton);
 }
