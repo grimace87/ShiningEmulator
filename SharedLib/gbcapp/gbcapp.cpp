@@ -231,9 +231,13 @@ void GbcApp::doWork() {
             } else if (startButton.containsCoords(downXUnits, downYUnits)) {
                 gbcKeys.pressStart();
             } else if (slowerButton.containsCoords(downXUnits, downYUnits)) {
-                gbc.slowDown();
+                if (!cursor.downHandled) {
+                    gbc.slowDown();
+                }
             } else if (fasterButton.containsCoords(downXUnits, downYUnits)) {
-                gbc.speedUp();
+                if (!cursor.downHandled) {
+                    gbc.speedUp();
+                }
             } else if (loadSaveStateButton.containsCoords(downXUnits, downYUnits)) {
                 if (!cursor.downHandled) {
                     auto file = platform.openFileInAppDir("temp.gss", "rb");

@@ -109,15 +109,20 @@ int Gbc::runInvalidInstruction(uint8_t instruction) {
 void Gbc::doWork(uint64_t timeDiffMillis, InputSet& inputs) {
     if (isRunning && !isPaused) {
         // Determine how many clock cycles to emulate, cap at 1000000 (about a quarter of a second)
-        const int64_t adjustedClocks = cpuClockFreq * clockMultiply / clockDivide;
-        clocksAcc += (int)((double)timeDiffMillis * 0.001 * (double)adjustedClocks);
-        if (clocksAcc > 1000000) {
-            clocksAcc = 1000000;
+        const int64_t adjustedFrequency = cpuClockFreq * clockMultiply / clockDivide;
+        clocksAcc += (int)((double)timeDiffMillis * 0.001 * (double)adjustedFrequency);
+        auto approxMultiplier = (const int32_t)(clockMultiply / clockDivide + 1);
+        if (clocksAcc > (1000000 * approxMultiplier)) {
+            clocksAcc = 1000000 * approxMultiplier;
         }
 
         // Copy inputs
         keys.keyDir = inputs.keyDir;
         keys.keyBut = inputs.keyBut;
+
+        if (clocksAcc < 2000) {
+            return;
+        }
 
         // Execute this many clock cycles and catch errors
         //try
@@ -6216,4 +6221,18 @@ void Gbc::saveSaveState(FILE* file) {
     fwrite(&this->sram, sizeof(Sram), 1, file);
     fwrite(&this->keys, sizeof(InputSet), 1, file);
     fwrite(&this->keyStateChanged, sizeof(bool), 1, file);
+
+    FILE* monitorLogFile = fopen("logged_times.txt", "w");
+    if (monitorLogFile) {
+        std::ofstream fileStream(monitorLogFile);
+        for (auto& monitor : clockMonitors) {
+            fileStream << "FR: " << std::setw(4) << monitor.frameNumber;
+            fileStream << " M: " << monitor.multiplier;
+            fileStream << " D: " << monitor.divider;
+            fileStream << " CB: " << monitor.clocksAddedBase;
+            fileStream << " CT: " << monitor.clocksAddedTransformed;
+            fileStream << std::endl;
+        }
+        fileStream.close();
+    }
 }
