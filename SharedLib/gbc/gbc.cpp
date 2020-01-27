@@ -17,6 +17,8 @@ uint32_t stockPaletteBg[4] = { 0xffffffffU, 0xff88b0b0U, 0xff507878U, 0xff000000
 uint32_t stockPaletteObj1[4] = { 0xffffffffU, 0xff5050f0U, 0xff2020a0U, 0xff000000U };
 uint32_t stockPaletteObj2[4] = { 0xffffffffU, 0xffa0a0a0U, 0xff404040U, 0xff000000U };
 
+uint32_t paletteIndicesAcrossRow[160];
+
 constexpr int MULTIPLIER_ARRAY_SIZE = 21;
 constexpr int CLOCK_MULTIPLIERS[MULTIPLIER_ARRAY_SIZE] = { 1,  1,  1, 1, 1,  2, 1, 4, 2, 4,  1,  5, 3, 7, 2, 5,  3, 5, 8, 12, 20 };
 constexpr int CLOCK_DIVISORS[MULTIPLIER_ARRAY_SIZE] =    { 20, 12, 8, 5, 3,  5, 2, 7, 3, 5,  1,  4, 2, 4, 1, 2,  1, 1, 1, 1,  1  };
@@ -1662,6 +1664,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     // More variables
     unsigned int offset, max;
     unsigned int pixX, pixY, tileX, tileY;
+    unsigned int pixelNo = 0;
     uint32_t* dstPointer;
     uint32_t* tileSetPointer;
 
@@ -1697,7 +1700,9 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
             // Draw up to 8 pixels of this tile
             while (pixX < 8) {
-                *dstPointer++ = translatedPaletteBg[*tileSetPointer++];
+                uint32_t colourIndex = *tileSetPointer++;
+                *dstPointer++ = translatedPaletteBg[colourIndex];
+                paletteIndicesAcrossRow[pixelNo++] = colourIndex;
                 pixX++;
             }
 
@@ -1715,7 +1720,9 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
         // Draw up to 8 pixels of this tile
         while (pixX < max) {
-            *dstPointer++ = translatedPaletteBg[*tileSetPointer++];
+            uint32_t colourIndex = *tileSetPointer++;
+            *dstPointer++ = translatedPaletteBg[colourIndex];
+            paletteIndicesAcrossRow[pixelNo++] = colourIndex;
             pixX++;
         }
     }
@@ -1724,6 +1731,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     scrX = ioPorts[0x4b];
     scrY = ioPorts[0x4a];
     tileMapBase = lcdCtrl & 0x40U ? 0x1c00U : 0x1800U;
+    pixelNo = 0;
     if (((lcdCtrl & 0x20U) != 0x00U) && (scrX < 167) && (scrY <= lineNo)) {
         // Subtract 7 from window X pos
         if (scrX > 6) {
@@ -1750,7 +1758,9 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
             // Draw the 8 pixels of this tile
             while (pixX < 8) {
-                *dstPointer++ = translatedPaletteBg[*tileSetPointer++];
+                uint32_t colourIndex = *tileSetPointer++;
+                *dstPointer++ = translatedPaletteBg[colourIndex];
+                paletteIndicesAcrossRow[pixelNo++] = colourIndex;
                 pixX++;
             }
 
@@ -1768,7 +1778,9 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
         // Draw up to 8 pixels of this tile
         while (pixX < offset) {
-            *dstPointer++ = translatedPaletteBg[*tileSetPointer++];
+            uint32_t colourIndex = *tileSetPointer++;
+            *dstPointer++ = translatedPaletteBg[colourIndex];
+            paletteIndicesAcrossRow[pixelNo++] = colourIndex;
             pixX++;
         }
     }
@@ -1818,7 +1830,6 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
             // Set which palette to draw with
             paletteOffset = spriteFlags & 0x10U ? 4 : 0;
-            uint32_t colourZero = translatedPaletteBg[0];
 
             // Get first pixel in tile row to draw, plus how many pixels to draw, and adjust the starting point to write to in the image
             if (scrX < 8) {
@@ -1855,6 +1866,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
             // Set point to draw to
             dstPointer = &frameBuffer[160 * lineNo + scrX];
+            pixelNo = scrX;
 
             // Get pointer to tile data
             tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
@@ -1866,7 +1878,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
                 tileSetPointer += tileSetPointerDirection;
                 if (getPix > 0) {
                     if (BackgroundPriority) {
-                        if (*dstPointer == colourZero) {
+                        if (paletteIndicesAcrossRow[pixelNo] == 0) {
                             *dstPointer = translatedPaletteObj[getPix + paletteOffset];
                         }
                     } else {
@@ -1875,6 +1887,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
                 }
                 dstPointer++;
                 pixX++;
+                pixelNo++;
             }
         }
     }
