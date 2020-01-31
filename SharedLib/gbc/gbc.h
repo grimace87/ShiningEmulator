@@ -5,6 +5,7 @@
 #include "framemanager.h"
 #include "sram.h"
 #include "sgbmodule.h"
+#include "audiounit.h"
 #include "debugwindowmodule.h"
 
 #include <cstdint>
@@ -82,6 +83,9 @@ class Gbc {
     uint32_t lastLYCompare{};
     bool blankedScreen;
     bool needClear;
+
+    // Private modules
+    AudioUnit audioUnit;
 
     // Line-processing functions
     void (Gbc::* readLine)(uint32_t*){};

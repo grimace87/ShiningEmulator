@@ -508,6 +508,7 @@ void Gbc::reset() {
     }
 
     // Other stuff:
+    audioUnit.reset(ioPorts);
     serialTimer = 0;
     cpuDividerCount = 0;
     cpuTimerCount = 0;
@@ -644,6 +645,9 @@ void Gbc::executeAccumulatedClocks() {
                 }
             }
         }
+
+        // Handle audio
+        audioUnit.simulate(clocksPassedByInstruction);
 
         // Handle serial port timeout
         if (serialIsTransferring) {
@@ -1400,6 +1404,29 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
                     break;
             }
             ioPorts[0x07] = data & 0x07U;
+            return;
+        case 0x23: // NR44 (audio channel 4 initialisation)
+            ioPorts[0x23] = data & 0x40U;
+            if ((data & 0x80U) && (ioPorts[0x26])) {
+                audioUnit.startChannel4(data);
+            }
+            return;
+        case 0x24: // NR50 (audio channel volume)
+            ioPorts[0x24] = data;
+            // TODO
+            return;
+        case 0x25: // NR51 (channel routing to output)
+            ioPorts[0x25] = data;
+            // TODO
+            return;
+        case 0x26: // NR52 (sound on/off)
+            byte = data & 0x80U;
+            if (byte == 0) {
+                ioPorts[0x26] = 0;
+                audioUnit.stopAllSound();
+            } else {
+                ioPorts[0x26] = (ioPorts[0x26] & 0x0fU) | byte;
+            }
             return;
         case 0x40: // LCD ctrl
             if (data < 128) {

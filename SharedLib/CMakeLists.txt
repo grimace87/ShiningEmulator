@@ -26,6 +26,6 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         gbc/sgbmodule.cpp
         gbc/sram.cpp
         renderconfig.cpp
-        gbcapp/gbcui.cpp)
+        gbcapp/gbcui.cpp gbc/audiounit.cpp gbc/audiounit.h)
 
 target_include_directories(SharedLib PRIVATE ../lib)
