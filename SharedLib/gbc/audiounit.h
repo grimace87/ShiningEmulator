@@ -7,9 +7,13 @@ class AudioUnit {
     uint64_t cumulativeTicks;
     size_t currentBufferHead;
     int16_t* buffer;
-    int16_t* noise;
 
     bool s4Running;
+
+    uint32_t lfsr; // 15-bit linear feedback shift register
+    uint32_t s4ShiftPeriod;
+    uint32_t s4ShiftProgress;
+    uint32_t s4ShiftFeedbackMask;
 
     bool s4HasLength;
     size_t s4LengthInSamples;

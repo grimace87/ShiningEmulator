@@ -1,7 +1,6 @@
 #include "audiounit.h"
 
 #include <cstdio>
-#include <cstdlib>
 
 #define GB_FREQ  4194304
 
@@ -39,12 +38,13 @@ AudioUnit::AudioUnit() {
     cumulativeTicks = 0;
     fileHasWritten = false;
     buffer = new int16_t[AUDIO_BUFFER_SIZE];
-    noise = new int16_t[NOISE_BUFFER_SIZE];
-    for (int i = 0; i < NOISE_BUFFER_SIZE; i++) {
-        noise[i] = (int16_t)(rand() % 512) - 256;
-    }
 
     s4Running = false;
+
+    lfsr = 0x0001U;
+    s4ShiftPeriod = 8;
+    s4ShiftProgress = 0;
+    s4ShiftFeedbackMask = 0x004000U;
 
     s4HasLength = false;
     s4LengthInSamples = 0;
@@ -59,7 +59,6 @@ AudioUnit::AudioUnit() {
 
 AudioUnit::~AudioUnit() {
     delete[] buffer;
-    delete[] noise;
 }
 
 void AudioUnit::reset(uint8_t* gbcPorts) {
@@ -77,6 +76,18 @@ void AudioUnit::stopAllSound() {
 void AudioUnit::simulate(uint64_t clockTicks) {
     if (fileHasWritten) {
         return;
+    }
+
+    // Simulate the LFSR
+    if (s4ShiftPeriod > 0) {
+        s4ShiftProgress += clockTicks;
+        if (s4ShiftProgress >= s4ShiftPeriod) {
+            s4ShiftProgress -= s4ShiftPeriod;
+            uint32_t feedbackBits = (lfsr & 0x0001U) ^ ((lfsr & 0x0002U) >> 1U);
+            feedbackBits *= s4ShiftFeedbackMask;
+            uint32_t shifted = lfsr >> 1U;
+            lfsr = (shifted & ~feedbackBits) | feedbackBits;
+        }
     }
 
     // Convert between cumulative clock ticks at the CPU's frequency to the emulated audio sample rate
@@ -111,7 +122,7 @@ void AudioUnit::simulate(uint64_t clockTicks) {
 
             size_t thisStart = head;
             while (head < nextEnd) {
-                uint32_t noiseValue = noise[head % NOISE_BUFFER_SIZE];
+                int16_t noiseValue = (int16_t)(lfsr & 0x0001U) * 256 - 128;
                 buffer[head] = noiseValue * (int16_t)(s4EnvelopeValue << 4U);
                 head++;
             }
@@ -155,6 +166,23 @@ void AudioUnit::startChannel4(uint8_t initByte) {
     if (!s4Running) {
         return;
     }
+
+    // Set feedback shifting parameters
+    uint32_t basePeriod;
+    uint8_t dividerFlags = NR43 & 0x07U;
+    if (dividerFlags == 0) {
+        basePeriod = 4;
+    } else {
+        basePeriod = dividerFlags * 8;
+    }
+    uint32_t bitShift = ((NR43 & 0xf0U) >> 4U) + 0x0001;
+    if (bitShift > 14) {
+        bitShift = 0;
+    }
+
+    s4ShiftFeedbackMask = (NR43 & 0x08U) ? 0x4040U : 0x4000U;
+    s4ShiftPeriod = basePeriod << bitShift;
+    s4ShiftProgress = 0;
 
     // Set length parameters
     s4HasLength = NR44 & 0x40U;
