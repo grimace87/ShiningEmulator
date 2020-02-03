@@ -39,6 +39,22 @@ AudioUnit::AudioUnit() {
     fileHasWritten = false;
     buffer = new int16_t[AUDIO_BUFFER_SIZE];
 
+    s2Running = false;
+
+    s2DutyOnLengthInTicks = 4;
+    s2DutyPeriodInTicks = 8;
+    s2CurrentDutyProgress = 0;
+
+    s2HasLength = false;
+    s2LengthInTicks = 0;
+    s2CurrentLengthProgress = 0;
+
+    s2HasEnvelope = false;
+    s2EnvelopeIncreases = false;
+    s2EnvelopeValue = 0;
+    s2EnvelopeStepInTicks = 0;
+    s2CurrentEnvelopeStepProgress = 0;
+
     s4Running = false;
 
     lfsr = 0x0001U;
@@ -79,6 +95,7 @@ void AudioUnit::simulate(uint64_t clockTicks) {
     }
 
     // Simulate each channel
+    simulateChannel2(clockTicks);
     simulateChannel4(clockTicks);
 
     // Convert between cumulative clock ticks at the CPU's frequency to the emulated audio sample rate
@@ -93,14 +110,53 @@ void AudioUnit::simulate(uint64_t clockTicks) {
     while (currentBufferHead < endPosition) {
 
         // Get channel signals
-        int16_t channel4 = getChannel4Signal();
+        int16_t channel2 = getChannel2Signal() / 2;
+        int16_t channel4 = getChannel4Signal() / 2;
 
         // Mix signals
-        buffer[currentBufferHead++] = channel4;
+        buffer[currentBufferHead++] = channel2 + channel4;
     }
 
     if (currentBufferHead >= AUDIO_BUFFER_SIZE) {
         writeFile();
+    }
+}
+
+void AudioUnit::simulateChannel2(size_t clockTicks) {
+
+    if (!s2Running) {
+        return;
+    }
+
+    // Simulate the running frequency
+    s2CurrentDutyProgress = (s2CurrentDutyProgress + clockTicks) % s2DutyPeriodInTicks;
+
+    // Simulate length
+    if (s2HasLength) {
+        s2CurrentLengthProgress += clockTicks;
+        if (s2CurrentLengthProgress >= s2LengthInTicks) {
+            s2HasLength = false;
+            s2Running = false;
+            NR52 &= 0xfdU;
+            return;
+        }
+    }
+
+    // Simulate envelope
+    if (s2HasEnvelope) {
+        size_t postProgress = s2CurrentEnvelopeStepProgress + clockTicks;
+        if (postProgress >= s2EnvelopeStepInTicks) {
+            if (s2EnvelopeIncreases) {
+                s2EnvelopeValue++;
+            } else {
+                s2EnvelopeValue--;
+            }
+            s2EnvelopeValue &= 0x0fU;
+            if (s2EnvelopeValue == 0) {
+                s2HasEnvelope = false;
+            }
+        }
+        s2CurrentEnvelopeStepProgress = postProgress % s2EnvelopeStepInTicks;
     }
 }
 
@@ -151,6 +207,15 @@ void AudioUnit::simulateChannel4(size_t clockTicks) {
     }
 }
 
+int16_t AudioUnit::getChannel2Signal() {
+    // TODO - Apply bias depending on duty cycle?
+    if (s2Running) {
+        int16_t baseAmplitude = s2CurrentDutyProgress < s2DutyOnLengthInTicks ? 128 : -128;
+        return baseAmplitude * (int16_t)(s2EnvelopeValue << 4U);
+    }
+    return MUTE_VALUE;
+}
+
 // Get LFSR signal as one of two values (-128 or 128) and multiply by enveloped volume (0 to 240)
 int16_t AudioUnit::getChannel4Signal() {
     if (s4Running) {
@@ -158,6 +223,40 @@ int16_t AudioUnit::getChannel4Signal() {
         return lfsrSignal * (int16_t) (s4EnvelopeValue << 4U);
     }
     return MUTE_VALUE;
+}
+
+void AudioUnit::startChannel2(uint8_t initByte) {
+
+    // Check running bit
+    s2Running = initByte & 0x80U;
+    if (!s2Running) {
+        return;
+    }
+
+    // Set frequency and duty cycle parameters
+    size_t dutyBits = NR21 >> 6U;
+    size_t frequencyBits = ((size_t)(NR24 & 0x07U) << 8U) + (size_t)NR23;
+    s2DutyPeriodInTicks = 32 * (2048 - frequencyBits);
+    s2CurrentDutyProgress = 0;
+    switch (dutyBits) {
+        case 0x0: s2DutyOnLengthInTicks = s2DutyPeriodInTicks / 8; break;
+        case 0x1: s2DutyOnLengthInTicks = s2DutyPeriodInTicks / 4; break;
+        case 0x2: s2DutyOnLengthInTicks = s2DutyPeriodInTicks / 2; break;
+        default: s2DutyOnLengthInTicks = 3 * s2DutyPeriodInTicks / 4; break;
+    }
+
+    // Set length parameters
+    s2HasLength = NR24 & 0x40U;
+    s2LengthInTicks = (64 - (size_t)(NR21 & 0x3FU)) * 16384;
+    s2CurrentLengthProgress = 0;
+
+    // Set envelope parameters
+    uint8_t stepSizeBits = NR22 & 0x07U;
+    s2EnvelopeStepInTicks = (size_t)stepSizeBits * GB_FREQ / 64;
+    s2HasEnvelope = stepSizeBits != 0;
+    s2EnvelopeIncreases = NR22 & 0x08U;
+    s2EnvelopeValue = NR22 >> 4U;
+    s2CurrentEnvelopeStepProgress = 0;
 }
 
 void AudioUnit::startChannel4(uint8_t initByte) {

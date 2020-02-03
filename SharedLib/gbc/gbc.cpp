@@ -647,7 +647,7 @@ void Gbc::executeAccumulatedClocks() {
         }
 
         // Handle audio
-        audioUnit.simulate(clocksPassedByInstruction);
+        audioUnit.simulate(clocksPassedByInstruction / gpuClockFactor);
 
         // Handle serial port timeout
         if (serialIsTransferring) {
@@ -1404,6 +1404,12 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
                     break;
             }
             ioPorts[0x07] = data & 0x07U;
+            return;
+        case 0x19: // NR24 (audio channel 2 initialisation)
+            ioPorts[0x19] = data & 0x47U;
+            if ((data & 0x80U) && (ioPorts[0x26])) {
+                audioUnit.startChannel2(data);
+            }
             return;
         case 0x23: // NR44 (audio channel 4 initialisation)
             ioPorts[0x23] = data & 0x40U;

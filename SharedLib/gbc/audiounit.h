@@ -8,6 +8,22 @@ class AudioUnit {
     size_t currentBufferHead;
     int16_t* buffer;
 
+    bool s2Running;
+
+    size_t s2DutyOnLengthInTicks;
+    size_t s2DutyPeriodInTicks;
+    size_t s2CurrentDutyProgress;
+
+    bool s2HasLength;
+    size_t s2LengthInTicks;
+    size_t s2CurrentLengthProgress;
+
+    bool s2HasEnvelope;
+    bool s2EnvelopeIncreases;
+    uint32_t s2EnvelopeValue;
+    size_t s2EnvelopeStepInTicks;
+    size_t s2CurrentEnvelopeStepProgress;
+
     bool s4Running;
 
     uint32_t lfsr; // 15-bit linear feedback shift register
@@ -28,7 +44,9 @@ class AudioUnit {
     void writeFile();
     bool fileHasWritten;
 
+    void simulateChannel2(size_t clockTicks);
     void simulateChannel4(size_t clockTicks);
+    int16_t getChannel2Signal();
     int16_t getChannel4Signal();
 
 public:
@@ -38,5 +56,6 @@ public:
     void stopAllSound();
     void simulate(uint64_t clockTicks);
 
+    void startChannel2(uint8_t initByte);
     void startChannel4(uint8_t initByte);
 };
