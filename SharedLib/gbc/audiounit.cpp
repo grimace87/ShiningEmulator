@@ -47,13 +47,13 @@ AudioUnit::AudioUnit() {
     s4ShiftFeedbackMask = 0x004000U;
 
     s4HasLength = false;
-    s4LengthInSamples = 0;
+    s4LengthInTicks = 0;
     s4CurrentLengthProgress = 0;
 
     s4HasEnvelope = false;
     s4EnvelopeIncreases = false;
     s4EnvelopeValue = 0;
-    s4EnvelopeStepInSamples = 0;
+    s4EnvelopeStepInTicks = 0;
     s4CurrentEnvelopeStepProgress = 0;
 }
 
@@ -78,6 +78,38 @@ void AudioUnit::simulate(uint64_t clockTicks) {
         return;
     }
 
+    // Simulate each channel
+    simulateChannel4(clockTicks);
+
+    // Convert between cumulative clock ticks at the CPU's frequency to the emulated audio sample rate
+    cumulativeTicks += clockTicks;
+    auto endPosition = (size_t)((SAMPLE_RATE / GB_FREQ) * (double)cumulativeTicks);
+
+    // Clamp value within file size
+    if (endPosition > AUDIO_BUFFER_SIZE) {
+        endPosition = AUDIO_BUFFER_SIZE;
+    }
+
+    while (currentBufferHead < endPosition) {
+
+        // Get channel signals
+        int16_t channel4 = getChannel4Signal();
+
+        // Mix signals
+        buffer[currentBufferHead++] = channel4;
+    }
+
+    if (currentBufferHead >= AUDIO_BUFFER_SIZE) {
+        writeFile();
+    }
+}
+
+void AudioUnit::simulateChannel4(size_t clockTicks) {
+
+    if (!s4Running) {
+        return;
+    }
+
     // Simulate the LFSR
     if (s4ShiftPeriod > 0) {
         s4ShiftProgress += clockTicks;
@@ -90,73 +122,42 @@ void AudioUnit::simulate(uint64_t clockTicks) {
         }
     }
 
-    // Convert between cumulative clock ticks at the CPU's frequency to the emulated audio sample rate
-    cumulativeTicks += clockTicks;
-    auto endPosition = (size_t)((SAMPLE_RATE / GB_FREQ) * (double)cumulativeTicks);
-
-    // Simulate channel 4 (noise channel)
-    if (endPosition > AUDIO_BUFFER_SIZE) {
-        endPosition = AUDIO_BUFFER_SIZE;
-    }
-    if (s4Running) {
-        while (currentBufferHead < endPosition) {
-            size_t head = currentBufferHead;
-
-            // Determine if the end of length or an envelope step is reached before the given end position
-            size_t lengthEnd = s4HasLength ? head + (s4LengthInSamples - s4CurrentLengthProgress) : endPosition + 1;
-            size_t envelopeEnd = s4HasEnvelope ? head + (s4EnvelopeStepInSamples - s4CurrentEnvelopeStepProgress) : endPosition + 1;
-
-            size_t nextEnd = endPosition;
-            bool endsLength = false;
-            bool endsEnvelope = false;
-            if (lengthEnd <= endPosition) {
-                nextEnd = lengthEnd;
-                if (lengthEnd <= envelopeEnd) {
-                    endsLength = true;
-                }
-            }
-            if (envelopeEnd <= nextEnd) {
-                nextEnd = envelopeEnd;
-                endsEnvelope = true;
-            }
-
-            size_t thisStart = head;
-            while (head < nextEnd) {
-                int16_t noiseValue = (int16_t)(lfsr & 0x0001U) * 256 - 128;
-                buffer[head] = noiseValue * (int16_t)(s4EnvelopeValue << 4U);
-                head++;
-            }
-            currentBufferHead = head;
-
-            if (endsLength) {
-                s4HasLength = false;
-                s4Running = false;
-                NR52 &= 0xf7U;
-                break;
-            } else {
-                s4CurrentLengthProgress += currentBufferHead - thisStart;
-            }
-            if (endsEnvelope) {
-                if (s4EnvelopeValue > 0) {
-                    s4EnvelopeValue--;
-                    s4CurrentEnvelopeStepProgress = 0;
-                }
-                if (s4EnvelopeValue == 0) {
-                    s4HasEnvelope = false;
-                }
-            } else {
-                s4CurrentEnvelopeStepProgress += currentBufferHead - thisStart;
-            }
+    // Simulate length
+    if (s4HasLength) {
+        s4CurrentLengthProgress += clockTicks;
+        if (s4CurrentLengthProgress >= s4LengthInTicks) {
+            s4HasLength = false;
+            s4Running = false;
+            NR52 &= 0xf7U;
+            return;
         }
     }
-    for (size_t head = currentBufferHead; head < endPosition; head++) {
-        buffer[head] = MUTE_VALUE;
-    }
-    currentBufferHead = endPosition;
 
-    if (currentBufferHead >= AUDIO_BUFFER_SIZE) {
-        writeFile();
+    // Simulate envelope
+    if (s4HasEnvelope) {
+        size_t postProgress = s4CurrentEnvelopeStepProgress + clockTicks;
+        if (postProgress >= s4EnvelopeStepInTicks) {
+            if (s4EnvelopeIncreases) {
+                s4EnvelopeValue++;
+            } else {
+                s4EnvelopeValue--;
+            }
+            s4EnvelopeValue &= 0x0fU;
+            if (s4EnvelopeValue == 0) {
+                s4HasEnvelope = false;
+            }
+        }
+        s4CurrentEnvelopeStepProgress = postProgress % s4EnvelopeStepInTicks;
     }
+}
+
+// Get LFSR signal as one of two values (-128 or 128) and multiply by enveloped volume (0 to 240)
+int16_t AudioUnit::getChannel4Signal() {
+    if (s4Running) {
+        int16_t lfsrSignal = (int16_t) (lfsr & 0x0001U) * 256 - 128;
+        return lfsrSignal * (int16_t) (s4EnvelopeValue << 4U);
+    }
+    return MUTE_VALUE;
 }
 
 void AudioUnit::startChannel4(uint8_t initByte) {
@@ -186,15 +187,15 @@ void AudioUnit::startChannel4(uint8_t initByte) {
 
     // Set length parameters
     s4HasLength = NR44 & 0x40U;
-    s4LengthInSamples = (size_t)((double)(NR41 & 0x3FU) * SAMPLE_RATE / GB_FREQ);
+    s4LengthInTicks = (64 - (size_t)(NR41 & 0x3FU)) * 16384;
     s4CurrentLengthProgress = 0;
 
     // Set envelope parameters
-    uint8_t stepSizeBits = NR12 & 0x07U;
-    s4EnvelopeStepInSamples = (size_t)((double)stepSizeBits * SAMPLE_RATE / 64);
+    uint8_t stepSizeBits = NR42 & 0x07U;
+    s4EnvelopeStepInTicks = (size_t)stepSizeBits * GB_FREQ / 64;
     s4HasEnvelope = stepSizeBits != 0;
-    s4EnvelopeIncreases = NR42 & 0x80U;
-    s4EnvelopeValue = NR12 >> 4U;
+    s4EnvelopeIncreases = NR42 & 0x08U;
+    s4EnvelopeValue = NR42 >> 4U;
     s4CurrentEnvelopeStepProgress = 0;
 }
 

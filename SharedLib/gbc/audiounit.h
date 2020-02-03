@@ -16,17 +16,20 @@ class AudioUnit {
     uint32_t s4ShiftFeedbackMask;
 
     bool s4HasLength;
-    size_t s4LengthInSamples;
+    size_t s4LengthInTicks;
     size_t s4CurrentLengthProgress;
 
     bool s4HasEnvelope;
     bool s4EnvelopeIncreases;
     uint32_t s4EnvelopeValue;
-    size_t s4EnvelopeStepInSamples;
+    size_t s4EnvelopeStepInTicks;
     size_t s4CurrentEnvelopeStepProgress;
 
     void writeFile();
     bool fileHasWritten;
+
+    void simulateChannel4(size_t clockTicks);
+    int16_t getChannel4Signal();
 
 public:
     AudioUnit();
