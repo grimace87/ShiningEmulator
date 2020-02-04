@@ -1405,6 +1405,12 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             }
             ioPorts[0x07] = data & 0x07U;
             return;
+        case 0x14: // NR14 (audio channel 1 initialisation)
+            ioPorts[0x14] = data & 0x47U;
+            if ((data & 0x80U) && (ioPorts[0x26])) {
+                audioUnit.startChannel1(data);
+            }
+            return;
         case 0x19: // NR24 (audio channel 2 initialisation)
             ioPorts[0x19] = data & 0x47U;
             if ((data & 0x80U) && (ioPorts[0x26])) {

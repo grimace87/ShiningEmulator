@@ -8,6 +8,22 @@ class AudioUnit {
     size_t currentBufferHead;
     int16_t* buffer;
 
+    bool s1Running;
+
+    size_t s1DutyOnLengthInTicks;
+    size_t s1DutyPeriodInTicks;
+    size_t s1CurrentDutyProgress;
+
+    bool s1HasLength;
+    size_t s1LengthInTicks;
+    size_t s1CurrentLengthProgress;
+
+    bool s1HasEnvelope;
+    bool s1EnvelopeIncreases;
+    uint32_t s1EnvelopeValue;
+    size_t s1EnvelopeStepInTicks;
+    size_t s1CurrentEnvelopeStepProgress;
+
     bool s2Running;
 
     size_t s2DutyOnLengthInTicks;
@@ -44,8 +60,10 @@ class AudioUnit {
     void writeFile();
     bool fileHasWritten;
 
+    void simulateChannel1(size_t clockTicks);
     void simulateChannel2(size_t clockTicks);
     void simulateChannel4(size_t clockTicks);
+    int16_t getChannel1Signal();
     int16_t getChannel2Signal();
     int16_t getChannel4Signal();
 
@@ -56,6 +74,7 @@ public:
     void stopAllSound();
     void simulate(uint64_t clockTicks);
 
+    void startChannel1(uint8_t initByte);
     void startChannel2(uint8_t initByte);
     void startChannel4(uint8_t initByte);
 };
