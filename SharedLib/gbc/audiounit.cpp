@@ -54,13 +54,13 @@ AudioUnit::AudioUnit() {
     s1CurrentDutyProgress = 0;
 
     s1HasLength = false;
-    s1LengthInTicks = 0;
+    s1LengthInTicks = 8;
     s1CurrentLengthProgress = 0;
 
     s1HasEnvelope = false;
     s1EnvelopeIncreases = false;
     s1EnvelopeValue = 0;
-    s1EnvelopeStepInTicks = 0;
+    s1EnvelopeStepInTicks = 8;
     s1CurrentEnvelopeStepProgress = 0;
 
     s2Running = false;
@@ -70,14 +70,27 @@ AudioUnit::AudioUnit() {
     s2CurrentDutyProgress = 0;
 
     s2HasLength = false;
-    s2LengthInTicks = 0;
+    s2LengthInTicks = 8;
     s2CurrentLengthProgress = 0;
 
     s2HasEnvelope = false;
     s2EnvelopeIncreases = false;
     s2EnvelopeValue = 0;
-    s2EnvelopeStepInTicks = 0;
+    s2EnvelopeStepInTicks = 8;
     s2CurrentEnvelopeStepProgress = 0;
+
+    s3Running = false;
+
+    s3CurrentWaveformPosition = 0;
+
+    s3HasLength = false;
+    s3LengthInTicks = 8;
+    s3CurrentLengthProgress = 0;
+
+    s3PeriodInTicks = 8;
+    s3CurrentProgress = 0;
+    s3VolumeMultiplier = 0;
+    s3VolumeDivisor = 1;
 
     s4Running = false;
 
@@ -87,13 +100,13 @@ AudioUnit::AudioUnit() {
     s4ShiftFeedbackMask = 0x004000U;
 
     s4HasLength = false;
-    s4LengthInTicks = 0;
+    s4LengthInTicks = 8;
     s4CurrentLengthProgress = 0;
 
     s4HasEnvelope = false;
     s4EnvelopeIncreases = false;
     s4EnvelopeValue = 0;
-    s4EnvelopeStepInTicks = 0;
+    s4EnvelopeStepInTicks = 8;
     s4CurrentEnvelopeStepProgress = 0;
 }
 
@@ -106,11 +119,14 @@ void AudioUnit::reset(uint8_t* gbcPorts) {
     ioPorts = gbcPorts;
 
     // TODO - Initialise sound parameters based on initial values in ioPorts
-    s4Running = false;
+    stopAllSound();
 }
 
 void AudioUnit::stopAllSound() {
-
+    s1Running = false;
+    s2Running = false;
+    s3Running = false;
+    s4Running = false;
 }
 
 void AudioUnit::simulate(uint64_t clockTicks) {
@@ -121,6 +137,7 @@ void AudioUnit::simulate(uint64_t clockTicks) {
     // Simulate each channel
     simulateChannel1(clockTicks);
     simulateChannel2(clockTicks);
+    simulateChannel3(clockTicks);
     simulateChannel4(clockTicks);
 
     // Convert between cumulative clock ticks at the CPU's frequency to the emulated audio sample rate
@@ -137,15 +154,23 @@ void AudioUnit::simulate(uint64_t clockTicks) {
         // Get channel signals
         int16_t channel1 = getChannel1Signal() / 4;
         int16_t channel2 = getChannel2Signal() / 4;
+        int16_t channel3 = getChannel3Signal() / 4;
         int16_t channel4 = getChannel4Signal() / 4;
 
         // Mix signals
-        buffer[currentBufferHead++] = channel1 + channel2 + channel4;
+        buffer[currentBufferHead++] = channel1 + channel2 + channel3 + channel4;
     }
 
     if (currentBufferHead >= AUDIO_BUFFER_SIZE) {
         writeFile();
     }
+}
+
+void AudioUnit::updateWaveformData(size_t ioIndex) {
+    uint8_t byte = ioPorts[ioIndex];
+    size_t dataIndex = (size_t)(ioIndex - 0x0030U) * 2;
+    waveformData[dataIndex] = (int16_t)(byte & 0xf0U) * 256 - 128;
+    waveformData[dataIndex + 1] = (int16_t)((byte & 0x0fU) << 4U) * 256 - 128;
 }
 
 void AudioUnit::simulateChannel1(size_t clockTicks) {
@@ -252,6 +277,28 @@ void AudioUnit::simulateChannel2(size_t clockTicks) {
     }
 }
 
+void AudioUnit::simulateChannel3(size_t clockTicks) {
+
+    if (!s3Running) {
+        return;
+    }
+
+    // Simulate the running frequency
+    s3CurrentProgress = (s3CurrentProgress + clockTicks) % s3PeriodInTicks;
+    s3CurrentWaveformPosition = s3CurrentProgress / (s3PeriodInTicks / 32);
+
+    // Simulate length
+    if (s3HasLength) {
+        s3CurrentLengthProgress += clockTicks;
+        if (s3CurrentLengthProgress >= s3LengthInTicks) {
+            s3HasLength = false;
+            s3Running = false;
+            NR52 &= 0xfbU;
+            return;
+        }
+    }
+}
+
 void AudioUnit::simulateChannel4(size_t clockTicks) {
 
     if (!s4Running) {
@@ -313,6 +360,13 @@ int16_t AudioUnit::getChannel2Signal() {
     if (s2Running) {
         int16_t baseAmplitude = s2CurrentDutyProgress < s2DutyOnLengthInTicks ? 128 : -128;
         return baseAmplitude * (int16_t)(s2EnvelopeValue << 4U);
+    }
+    return MUTE_VALUE;
+}
+
+int16_t AudioUnit::getChannel3Signal() {
+    if (s3Running) {
+        return waveformData[s3CurrentWaveformPosition] * s3VolumeMultiplier / s3VolumeDivisor;
     }
     return MUTE_VALUE;
 }
@@ -404,6 +458,39 @@ void AudioUnit::startChannel2(uint8_t initByte) {
     s2CurrentEnvelopeStepProgress = 0;
 }
 
+void AudioUnit::startChannel3(uint8_t initByte) {
+
+    // Check running bit
+    s3Running = initByte & 0x80U;
+    if (!s3Running) {
+        return;
+    }
+
+    s3CurrentWaveformPosition = 0;
+
+    // Set length parameters
+    s3HasLength = NR34 & 0x40U;
+    s3LengthInTicks = (256 - (size_t)(NR31 & 0x3FU)) * 16384;
+    s3CurrentLengthProgress = 0;
+
+    // Set period parameters
+    size_t frequencyBits = ((size_t)(NR34 & 0x07U) << 8U) + (size_t)NR33;
+    s3PeriodInTicks = 32 * (2048 - frequencyBits);
+    s3CurrentProgress = 0;
+
+    // Set volume
+    uint8_t volumeBits = (NR32 & 0x60U) >> 5U;
+    switch (volumeBits) {
+        case 0: s3VolumeMultiplier = 0; s3VolumeDivisor = 1; break;
+        case 1: s3VolumeMultiplier = 1; s3VolumeDivisor = 1; break;
+        case 2: s3VolumeMultiplier = 1; s3VolumeDivisor = 2; break;
+        default: s3VolumeMultiplier = 1; s3VolumeDivisor = 4; break;
+    }
+    if ((NR30 & 0x80U) == 0) {
+        s3VolumeMultiplier = 0;
+    }
+}
+
 void AudioUnit::startChannel4(uint8_t initByte) {
 
     // Check running bit
@@ -452,7 +539,7 @@ void AudioUnit::writeFile() {
     if (res != 0) {
         return;
     }
-    fwrite((const void*)buffer, sizeof(uint8_t), AUDIO_BUFFER_SIZE, audioFile);
+    fwrite((const void*)buffer, sizeof(uint16_t), AUDIO_BUFFER_SIZE, audioFile);
     fclose(audioFile);
     fileHasWritten = true;
 }

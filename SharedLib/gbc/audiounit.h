@@ -7,6 +7,7 @@ class AudioUnit {
     uint64_t cumulativeTicks;
     size_t currentBufferHead;
     int16_t* buffer;
+    int16_t waveformData[32];
 
     bool s1Running;
 
@@ -48,6 +49,19 @@ class AudioUnit {
     size_t s2EnvelopeStepInTicks;
     size_t s2CurrentEnvelopeStepProgress;
 
+    bool s3Running;
+
+    size_t s3CurrentWaveformPosition;
+
+    bool s3HasLength;
+    size_t s3LengthInTicks;
+    size_t s3CurrentLengthProgress;
+
+    size_t s3PeriodInTicks;
+    size_t s3CurrentProgress;
+    int16_t s3VolumeMultiplier;
+    int16_t s3VolumeDivisor;
+
     bool s4Running;
 
     uint32_t lfsr; // 15-bit linear feedback shift register
@@ -70,9 +84,11 @@ class AudioUnit {
 
     void simulateChannel1(size_t clockTicks);
     void simulateChannel2(size_t clockTicks);
+    void simulateChannel3(size_t clockTicks);
     void simulateChannel4(size_t clockTicks);
     int16_t getChannel1Signal();
     int16_t getChannel2Signal();
+    int16_t getChannel3Signal();
     int16_t getChannel4Signal();
 
 public:
@@ -81,8 +97,10 @@ public:
     void reset(uint8_t* gbcPorts);
     void stopAllSound();
     void simulate(uint64_t clockTicks);
+    void updateWaveformData(size_t ioIndex);
 
     void startChannel1(uint8_t initByte);
     void startChannel2(uint8_t initByte);
+    void startChannel3(uint8_t initByte);
     void startChannel4(uint8_t initByte);
 };

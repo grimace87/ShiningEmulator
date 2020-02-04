@@ -1417,6 +1417,12 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
                 audioUnit.startChannel2(data);
             }
             return;
+        case 0x1e: // NR34 (audio channel 3 initialisation)
+            ioPorts[0x1e] = data & 0x80U;
+            if ((data & 0x80U) && (ioPorts[0x26])) {
+                audioUnit.startChannel3(data);
+            }
+            return;
         case 0x23: // NR44 (audio channel 4 initialisation)
             ioPorts[0x23] = data & 0x40U;
             if ((data & 0x80U) && (ioPorts[0x26])) {
@@ -1439,6 +1445,25 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             } else {
                 ioPorts[0x26] = (ioPorts[0x26] & 0x0fU) | byte;
             }
+            return;
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33:
+        case 0x34:
+        case 0x35:
+        case 0x36:
+        case 0x37:
+        case 0x38:
+        case 0x39:
+        case 0x3a:
+        case 0x3b:
+        case 0x3c:
+        case 0x3d:
+        case 0x3e:
+        case 0x3f:
+            ioPorts[ioIndex] = data;
+            audioUnit.updateWaveformData(ioIndex);
             return;
         case 0x40: // LCD ctrl
             if (data < 128) {
