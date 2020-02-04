@@ -11,8 +11,16 @@ class AudioUnit {
     bool s1Running;
 
     size_t s1DutyOnLengthInTicks;
+    uint8_t s1DutyBits;
     size_t s1DutyPeriodInTicks;
     size_t s1CurrentDutyProgress;
+
+    bool s1HasSweep;
+    bool s1SweepIncreases;
+    size_t s1SweepPeriodInTicks;
+    size_t s1CurrentSweepProgress;
+    size_t s1CurrentFrequency;
+    size_t s1FrequencyDivisor;
 
     bool s1HasLength;
     size_t s1LengthInTicks;

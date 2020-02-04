@@ -41,7 +41,15 @@ AudioUnit::AudioUnit() {
 
     s1Running = false;
 
+    s1HasSweep = false;
+    s1SweepIncreases = false;
+    s1SweepPeriodInTicks = 8;
+    s1CurrentSweepProgress = 0;
+    s1CurrentFrequency = 0;
+    s1FrequencyDivisor = 2;
+
     s1DutyOnLengthInTicks = 4;
+    s1DutyBits = 0;
     s1DutyPeriodInTicks = 8;
     s1CurrentDutyProgress = 0;
 
@@ -144,6 +152,34 @@ void AudioUnit::simulateChannel1(size_t clockTicks) {
 
     if (!s1Running) {
         return;
+    }
+
+    // Simulate the sweep function
+    if (s1HasSweep) {
+        size_t postProgress = s1CurrentSweepProgress + clockTicks;
+        s1CurrentSweepProgress = postProgress % s1SweepPeriodInTicks;
+        if (postProgress > s1SweepPeriodInTicks) {
+            if (s1SweepIncreases) {
+                s1CurrentFrequency += s1CurrentFrequency / s1FrequencyDivisor;
+                if (s1CurrentFrequency > 0x07ffU) {
+                    s1Running = false;
+                    NR52 &= 0xfeU;
+                    return;
+                }
+                s1SweepPeriodInTicks = GB_FREQ / s1CurrentFrequency;
+            } else {
+                if (s1FrequencyDivisor > s1CurrentFrequency) {
+                    s1CurrentFrequency -= s1CurrentFrequency / s1FrequencyDivisor;
+                    s1SweepPeriodInTicks = GB_FREQ / s1CurrentFrequency;
+                }
+            }
+            switch (s1DutyBits) {
+                case 0x0: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 8; break;
+                case 0x1: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 4; break;
+                case 0x2: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 2; break;
+                default: s1DutyOnLengthInTicks = 3 * s1DutyPeriodInTicks / 4; break;
+            }
+        }
     }
 
     // Simulate the running frequency
@@ -299,16 +335,26 @@ void AudioUnit::startChannel1(uint8_t initByte) {
     }
 
     // Set frequency and duty cycle parameters
-    size_t dutyBits = NR11 >> 6U;
+    s1DutyBits = NR11 >> 6U;
     size_t frequencyBits = ((size_t)(NR14 & 0x07U) << 8U) + (size_t)NR13;
     s1DutyPeriodInTicks = 32 * (2048 - frequencyBits);
     s1CurrentDutyProgress = 0;
-    switch (dutyBits) {
+    switch (s1DutyBits) {
         case 0x0: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 8; break;
         case 0x1: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 4; break;
         case 0x2: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 2; break;
         default: s1DutyOnLengthInTicks = 3 * s1DutyPeriodInTicks / 4; break;
     }
+
+    // Set sweep parameters
+    uint8_t sweepAmountBits = NR10 & 0x07U;
+    uint8_t sweepTimeBits = (NR10 & 0x70U) >> 4U;
+    s1HasSweep = sweepTimeBits != 0;
+    s1SweepIncreases = (NR10 & 0x08U) == 0;
+    s1SweepPeriodInTicks = s1HasSweep ? GB_FREQ / (128 * (size_t)sweepTimeBits) : 8;
+    s1CurrentSweepProgress = 0;
+    s1CurrentFrequency = GB_FREQ / s1DutyPeriodInTicks;
+    s1FrequencyDivisor = 1U << (size_t)sweepAmountBits;
 
     // Set length parameters
     s1HasLength = NR14 & 0x40U;
