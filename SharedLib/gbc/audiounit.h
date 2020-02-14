@@ -10,7 +10,8 @@ struct Sample{
 class AudioUnit {
     uint8_t* ioPorts;
     uint64_t cumulativeTicks;
-    size_t currentBufferHead;
+    uint32_t bufferWriteHead;
+    uint32_t bufferReadHead;
     Sample* buffer;
     int16_t waveformData[32];
     bool globalAudioEnable;
@@ -94,9 +95,6 @@ class AudioUnit {
     size_t s4EnvelopeStepInTicks;
     size_t s4CurrentEnvelopeStepProgress;
 
-    void writeFile();
-    bool fileHasWritten;
-
     void simulateChannel1(size_t clockTicks);
     void simulateChannel2(size_t clockTicks);
     void simulateChannel3(size_t clockTicks);
@@ -105,6 +103,10 @@ class AudioUnit {
     int16_t getChannel2Signal();
     int16_t getChannel3Signal();
     int16_t getChannel4Signal();
+
+    void writeAudioBuffer(Sample* dstBuffer, uint32_t frameCount);
+    static void muteExternalBufferFrames(Sample* dstBuffer, uint32_t frameCount);
+
 
 public:
     AudioUnit();
@@ -120,4 +122,6 @@ public:
     void startChannel2(uint8_t initByte);
     void startChannel3(uint8_t initByte);
     void startChannel4(uint8_t initByte);
+
+    void onAudioThreadNeedingData(int16_t* bufferPtr, uint32_t frameCount);
 };

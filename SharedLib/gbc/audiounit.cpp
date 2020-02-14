@@ -1,6 +1,7 @@
 #include "audiounit.h"
 
 #include <cstdio>
+#include <algorithm>
 
 #define GB_FREQ  4194304
 
@@ -34,9 +35,9 @@
 
 AudioUnit::AudioUnit() {
     ioPorts = nullptr;
-    currentBufferHead = 0;
+    bufferWriteHead = 0;
+    bufferReadHead = 0;
     cumulativeTicks = 0;
-    fileHasWritten = false;
     buffer = new Sample[AUDIO_BUFFER_SIZE_FRAMES];
     globalAudioEnable = false;
 
@@ -125,7 +126,8 @@ AudioUnit::~AudioUnit() {
 }
 
 void AudioUnit::reset(uint8_t* gbcPorts) {
-    currentBufferHead = 0;
+    bufferWriteHead = 0;
+    bufferReadHead = 0;
     ioPorts = gbcPorts;
 
     // TODO - Initialise sound parameters based on initial values in ioPorts
@@ -157,10 +159,6 @@ void AudioUnit::updateRoutingMasks() {
 }
 
 void AudioUnit::simulate(uint64_t clockTicks) {
-    if (fileHasWritten) {
-        return;
-    }
-
     // Simulate each channel
     simulateChannel1(clockTicks);
     simulateChannel2(clockTicks);
@@ -171,13 +169,10 @@ void AudioUnit::simulate(uint64_t clockTicks) {
     cumulativeTicks += clockTicks;
     auto endPosition = (size_t)((SAMPLE_RATE / GB_FREQ) * (double)cumulativeTicks);
 
-    // Clamp value within file size
-    if (endPosition > AUDIO_BUFFER_SIZE_FRAMES) {
-        endPosition = AUDIO_BUFFER_SIZE_FRAMES;
-    }
+    // Wrap head position within buffer
+    endPosition %= AUDIO_BUFFER_SIZE_FRAMES;
 
-    while (currentBufferHead != endPosition) {
-
+    while (bufferWriteHead != endPosition) {
         // Get channel signals
         int16_t channel1 = getChannel1Signal() / 4;
         int16_t channel2 = getChannel2Signal() / 4;
@@ -187,11 +182,8 @@ void AudioUnit::simulate(uint64_t clockTicks) {
         // Mix signals
         int16_t output1 = out1Generator1 * channel1 + out1Generator2 * channel2 + out1Generator3 * channel3 + out1Generator4 * channel4;
         int16_t output2 = out2Generator1 * channel1 + out2Generator2 * channel2 + out2Generator3 * channel3 + out2Generator4 * channel4;
-        buffer[currentBufferHead++] = {output1, output2};
-    }
-
-    if (currentBufferHead >= AUDIO_BUFFER_SIZE_FRAMES) {
-        writeFile();
+        buffer[bufferWriteHead++] = {output1, output2};
+        bufferWriteHead %= AUDIO_BUFFER_SIZE_FRAMES;
     }
 }
 
@@ -559,16 +551,34 @@ void AudioUnit::startChannel4(uint8_t initByte) {
     s4CurrentEnvelopeStepProgress = 0;
 }
 
-void AudioUnit::writeFile() {
-    if (fileHasWritten) {
-        return;
+void AudioUnit::onAudioThreadNeedingData(int16_t* dstBuffer, uint32_t frameCount) {
+    uint32_t latestHeadPosition = bufferWriteHead;
+    uint32_t availableFrames = (latestHeadPosition + AUDIO_BUFFER_SIZE_FRAMES - bufferReadHead) % AUDIO_BUFFER_SIZE_FRAMES;
+    if (availableFrames >= frameCount) {
+        writeAudioBuffer((Sample*)dstBuffer, frameCount);
+    } else {
+        // Buffer under-run - move write head forward (and mute) to compensate
+        uint32_t frameShortage = frameCount - availableFrames;
+        writeAudioBuffer((Sample*)dstBuffer, availableFrames);
+        muteExternalBufferFrames((Sample*)dstBuffer + availableFrames, frameShortage);
+        bufferWriteHead = (latestHeadPosition + frameShortage) % AUDIO_BUFFER_SIZE_FRAMES;
     }
-    FILE* audioFile;
-    errno_t res = fopen_s(&audioFile, "output.raw", "wb");
-    if (res != 0) {
-        return;
+}
+
+void AudioUnit::writeAudioBuffer(Sample* dstBuffer, uint32_t frameCount) {
+    uint32_t head = bufferReadHead;
+    uint32_t target = (bufferReadHead + frameCount) % AUDIO_BUFFER_SIZE_FRAMES;
+    while (head != target) {
+        *dstBuffer = buffer[head];
+        dstBuffer++;
+        head++;
+        head %= AUDIO_BUFFER_SIZE_FRAMES;
     }
-    fwrite((const void*)buffer, sizeof(Sample), AUDIO_BUFFER_SIZE_FRAMES, audioFile);
-    fclose(audioFile);
-    fileHasWritten = true;
+    bufferReadHead = target;
+}
+
+void AudioUnit::muteExternalBufferFrames(Sample* dstBuffer, uint32_t frameCount) {
+    for (uint32_t head = 0; head < frameCount; head++) {
+        dstBuffer[head] = { MUTE_VALUE, MUTE_VALUE };
+    }
 }
