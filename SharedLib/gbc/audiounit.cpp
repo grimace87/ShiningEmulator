@@ -4,9 +4,9 @@
 
 #define GB_FREQ  4194304
 
-#define SAMPLE_RATE 44100.0
-#define AUDIO_BUFFER_SIZE 4194304
-#define NOISE_BUFFER_SIZE 256
+#define SAMPLE_RATE 48000.0
+#define AUDIO_BUFFER_SIZE_FRAMES 131072
+#define NO_OF_CHANNELS 2
 
 #define MUTE_VALUE 0x0000
 
@@ -37,7 +37,7 @@ AudioUnit::AudioUnit() {
     currentBufferHead = 0;
     cumulativeTicks = 0;
     fileHasWritten = false;
-    buffer = new int16_t[AUDIO_BUFFER_SIZE];
+    buffer = new Sample[AUDIO_BUFFER_SIZE_FRAMES];
 
     s1Running = false;
 
@@ -145,11 +145,11 @@ void AudioUnit::simulate(uint64_t clockTicks) {
     auto endPosition = (size_t)((SAMPLE_RATE / GB_FREQ) * (double)cumulativeTicks);
 
     // Clamp value within file size
-    if (endPosition > AUDIO_BUFFER_SIZE) {
-        endPosition = AUDIO_BUFFER_SIZE;
+    if (endPosition > AUDIO_BUFFER_SIZE_FRAMES) {
+        endPosition = AUDIO_BUFFER_SIZE_FRAMES;
     }
 
-    while (currentBufferHead < endPosition) {
+    while (currentBufferHead != endPosition) {
 
         // Get channel signals
         int16_t channel1 = getChannel1Signal() / 4;
@@ -158,10 +158,11 @@ void AudioUnit::simulate(uint64_t clockTicks) {
         int16_t channel4 = getChannel4Signal() / 4;
 
         // Mix signals
-        buffer[currentBufferHead++] = channel1 + channel2 + channel3 + channel4;
+        int16_t output = channel1 + channel2 + channel3 + channel4;
+        buffer[currentBufferHead++] = {output, output};
     }
 
-    if (currentBufferHead >= AUDIO_BUFFER_SIZE) {
+    if (currentBufferHead >= AUDIO_BUFFER_SIZE_FRAMES) {
         writeFile();
     }
 }
@@ -539,7 +540,7 @@ void AudioUnit::writeFile() {
     if (res != 0) {
         return;
     }
-    fwrite((const void*)buffer, sizeof(uint16_t), AUDIO_BUFFER_SIZE, audioFile);
+    fwrite((const void*)buffer, sizeof(Sample), AUDIO_BUFFER_SIZE_FRAMES, audioFile);
     fclose(audioFile);
     fileHasWritten = true;
 }

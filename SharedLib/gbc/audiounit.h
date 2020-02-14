@@ -2,11 +2,16 @@
 
 #include <cstdint>
 
+struct Sample{
+    int16_t left;
+    int16_t right;
+};
+
 class AudioUnit {
     uint8_t* ioPorts;
     uint64_t cumulativeTicks;
     size_t currentBufferHead;
-    int16_t* buffer;
+    Sample* buffer;
     int16_t waveformData[32];
 
     bool s1Running;
