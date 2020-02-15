@@ -1429,13 +1429,12 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
                 audioUnit.startChannel4(data);
             }
             return;
-        case 0x24: // NR50 (audio channel volume)
+        case 0x24: // NR50 (Vin audio enable and volume - not emulated)
             ioPorts[0x24] = data;
-            // TODO
             return;
         case 0x25: // NR51 (channel routing to output)
             ioPorts[0x25] = data;
-            // TODO
+            audioUnit.updateRoutingMasks();
             return;
         case 0x26: // NR52 (sound on/off)
             byte = data & 0x80U;
@@ -1444,6 +1443,7 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
                 audioUnit.stopAllSound();
             } else {
                 ioPorts[0x26] = (ioPorts[0x26] & 0x0fU) | byte;
+                audioUnit.reenableAudio();
             }
             return;
         case 0x30:

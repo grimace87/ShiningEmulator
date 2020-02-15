@@ -38,6 +38,16 @@ AudioUnit::AudioUnit() {
     cumulativeTicks = 0;
     fileHasWritten = false;
     buffer = new Sample[AUDIO_BUFFER_SIZE_FRAMES];
+    globalAudioEnable = false;
+
+    out1Generator1 = 0;
+    out1Generator2 = 0;
+    out1Generator3 = 0;
+    out1Generator4 = 0;
+    out2Generator1 = 0;
+    out2Generator2 = 0;
+    out2Generator3 = 0;
+    out2Generator4 = 0;
 
     s1Running = false;
 
@@ -123,10 +133,27 @@ void AudioUnit::reset(uint8_t* gbcPorts) {
 }
 
 void AudioUnit::stopAllSound() {
+    globalAudioEnable = false;
     s1Running = false;
     s2Running = false;
     s3Running = false;
     s4Running = false;
+}
+
+void AudioUnit::reenableAudio() {
+    globalAudioEnable = true;
+}
+
+void AudioUnit::updateRoutingMasks() {
+    uint8_t flags = NR51;
+    out1Generator1 = (int16_t)(flags & 0x01U);
+    out1Generator2 = (int16_t)((flags & 0x02U) >> 1);
+    out1Generator3 = (int16_t)((flags & 0x04U) >> 2);
+    out1Generator4 = (int16_t)((flags & 0x08U) >> 3);
+    out2Generator1 = (int16_t)((flags & 0x10U) >> 4);
+    out2Generator2 = (int16_t)((flags & 0x20U) >> 5);
+    out2Generator3 = (int16_t)((flags & 0x40U) >> 6);
+    out2Generator4 = (int16_t)((flags & 0x80U) >> 7);
 }
 
 void AudioUnit::simulate(uint64_t clockTicks) {
@@ -158,8 +185,9 @@ void AudioUnit::simulate(uint64_t clockTicks) {
         int16_t channel4 = getChannel4Signal() / 4;
 
         // Mix signals
-        int16_t output = channel1 + channel2 + channel3 + channel4;
-        buffer[currentBufferHead++] = {output, output};
+        int16_t output1 = out1Generator1 * channel1 + out1Generator2 * channel2 + out1Generator3 * channel3 + out1Generator4 * channel4;
+        int16_t output2 = out2Generator1 * channel1 + out2Generator2 * channel2 + out2Generator3 * channel3 + out2Generator4 * channel4;
+        buffer[currentBufferHead++] = {output1, output2};
     }
 
     if (currentBufferHead >= AUDIO_BUFFER_SIZE_FRAMES) {

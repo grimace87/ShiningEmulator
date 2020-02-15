@@ -13,6 +13,16 @@ class AudioUnit {
     size_t currentBufferHead;
     Sample* buffer;
     int16_t waveformData[32];
+    bool globalAudioEnable;
+
+    int16_t out1Generator1;
+    int16_t out1Generator2;
+    int16_t out1Generator3;
+    int16_t out1Generator4;
+    int16_t out2Generator1;
+    int16_t out2Generator2;
+    int16_t out2Generator3;
+    int16_t out2Generator4;
 
     bool s1Running;
 
@@ -101,6 +111,8 @@ public:
     ~AudioUnit();
     void reset(uint8_t* gbcPorts);
     void stopAllSound();
+    void reenableAudio();
+    void updateRoutingMasks();
     void simulate(uint64_t clockTicks);
     void updateWaveformData(size_t ioIndex);
 
