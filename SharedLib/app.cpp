@@ -2,6 +2,7 @@
 
 #include "appplatform.h"
 #include "renderer.h"
+#include "audiostreamer.h"
 
 AppState* App::savedState = nullptr;
 char* App::pendingFileToOpen = nullptr;
@@ -23,6 +24,9 @@ bool App::initObject() {
 void App::killObject() {
     if (renderer) {
         renderer->stopThread();
+    }
+    if (audioStreamer) {
+        audioStreamer->stop();
     }
 }
 

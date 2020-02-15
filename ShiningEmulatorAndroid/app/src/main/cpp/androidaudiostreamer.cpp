@@ -42,17 +42,18 @@ void AndroidAudioStreamer::start() {
     builder.setSharingMode(oboe::SharingMode::Exclusive);
     builder.setCallback(this);
     builder.setFormat(oboe::AudioFormat::I16);
+    builder.setChannelCount(2);
+    builder.setSampleRate(48000);
 
     oboe::AudioStream* stream;
     oboe::Result result = builder.openStream(&stream);
     RET_ERR_RES("Error opening stream: %s")
 
-    // Set buffer size using a 'good rule of thumb'
+    // Set buffer size, must be a multiple of the burst size (official video says 2 times burst
+    // size is a sensible 'rule of thumb')
     int32_t sensibleBufferSize = 2 * stream->getFramesPerBurst();
     auto bufferSetResult = stream->setBufferSizeInFrames(sensibleBufferSize);
-    if (bufferSetResult) {
-        LOG_ERR("Error setting buffer size: %d", bufferSetResult.value());
-    }
+    result = bufferSetResult.error();
     RET_ERR_RES("Error setting buffer size: %s")
 
     setStream(stream);

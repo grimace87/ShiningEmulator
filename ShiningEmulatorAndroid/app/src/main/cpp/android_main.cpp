@@ -91,14 +91,15 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     LOGV("NativeWindowCreated: %p -- %p\n", activity, window);
 
     // Close existing app
-    /* TODO - Consider re-introducing
     if (app != nullptr) {
-        app->persistState();
-        app->stopThread();
-        delete app;
+        // TODO - Consider re-introducing these things?
+//        app->persistState();
+//        app->stopThread();
+//        delete app;
+
+        app->killObject();
         app = nullptr;
     }
-     */
 
     // Create new app instance
     auto platform = new AndroidAppPlatform(activity, window);
