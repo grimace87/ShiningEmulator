@@ -552,6 +552,13 @@ void AudioUnit::startChannel4(uint8_t initByte) {
 }
 
 void AudioUnit::onAudioThreadNeedingData(int16_t* dstBuffer, uint32_t frameCount) {
+    // Sound off - mute audio
+    if (!globalAudioEnable) {
+        muteExternalBufferFrames((Sample*)dstBuffer, frameCount);
+        return;
+    }
+
+    // Fill as many of 'frameCount' frames are available, mute the rest
     uint32_t latestHeadPosition = bufferWriteHead;
     uint32_t availableFrames = (latestHeadPosition + AUDIO_BUFFER_SIZE_FRAMES - bufferReadHead) % AUDIO_BUFFER_SIZE_FRAMES;
     if (availableFrames >= frameCount) {
