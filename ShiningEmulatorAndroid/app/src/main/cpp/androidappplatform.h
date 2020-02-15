@@ -38,6 +38,7 @@ protected:
 
 public:
 	PlatformRenderer* newPlatformRenderer() final;
+	AudioStreamer* newAudioStreamer(Gbc* gbc) final;
 	Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) override;
 	Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) override;
 	FILE* openFileInAppDir(std::string fileName, const char* mode) override;

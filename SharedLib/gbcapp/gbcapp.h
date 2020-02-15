@@ -12,6 +12,7 @@ private:
 protected:
     void processMsg(const Message& msg) override;
     bool createRenderer() override;
+    bool createAudioStreamer() override;
 public:
     GbcApp(AppPlatform& platform);
     ~GbcApp() override;

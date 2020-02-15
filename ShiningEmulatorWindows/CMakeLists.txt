@@ -16,7 +16,9 @@ add_executable(ShiningEmulatorWindows WIN32
         windowsfilehelper.cpp
         windowsmain.cpp
         windowsrenderer.cpp
-        windowsresource.cpp)
+        windowsresource.cpp
+        windowsaudiostreamer.cpp
+        )
 
 target_include_directories(ShiningEmulatorWindows PRIVATE ../lib)
 

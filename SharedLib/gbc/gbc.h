@@ -84,9 +84,6 @@ class Gbc {
     bool blankedScreen;
     bool needClear;
 
-    // Private modules
-    AudioUnit audioUnit;
-
     // Line-processing functions
     void (Gbc::* readLine)(uint32_t*){};
     void readLineGb(uint32_t* frameBuffer);
@@ -114,9 +111,10 @@ public:
     RomProperties romProperties{};
 	uint32_t bankOffset{};
 
-    // SRAM and SGB
+    // Public modules
     Sram sram;
     SgbModule sgb{};
+    AudioUnit audioUnit;
 
     // CPU registers
     uint32_t cpuPc;

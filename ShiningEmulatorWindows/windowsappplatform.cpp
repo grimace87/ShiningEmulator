@@ -3,8 +3,8 @@
 #include "windowsresource.h"
 #include "windowsfilehelper.h"
 #include "../SharedLib/menu.h"
-#include "windowsappplatform.h"
 #include "windowsrenderer.h"
+#include "windowsaudiostreamer.h"
 #include "../SharedLib/gbc/debugwindowmodule.h"
 
 #include <Xinput.h>
@@ -28,6 +28,10 @@ bool WindowsAppPlatform::onAppThreadStarted(App* app) {
 
 PlatformRenderer* WindowsAppPlatform::newPlatformRenderer() {
     return new WindowsRenderer(hDC, canvasWidth, canvasHeight);
+}
+
+AudioStreamer* WindowsAppPlatform::newAudioStreamer(Gbc* gbc) {
+    return new WindowsAudioStreamer(gbc);
 }
 
 Resource* WindowsAppPlatform::getResource(const char* fileName, bool isAsset, bool isGlShader) {

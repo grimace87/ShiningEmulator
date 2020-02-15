@@ -18,6 +18,7 @@
 #include "androidappplatform.h"
 #include "androidresource.h"
 #include "androidrenderer.h"
+#include "androidaudiostreamer.h"
 #include "../../../../../SharedLib/app.h"
 
 #include <android/log.h>
@@ -66,6 +67,10 @@ uint64_t AndroidAppPlatform::getUptimeMillis() {
 
 PlatformRenderer* AndroidAppPlatform::newPlatformRenderer() {
     return new AndroidRenderer(window);
+}
+
+AudioStreamer* AndroidAppPlatform::newAudioStreamer(Gbc* gbc) {
+    return new AndroidAudioStreamer(gbc);
 }
 
 Resource* AndroidAppPlatform::getResource(const char* fileName, bool isAsset, bool isGlShader) {

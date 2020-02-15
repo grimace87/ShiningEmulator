@@ -9,6 +9,7 @@ char* App::pendingFileToOpen = nullptr;
 App::App(AppPlatform& platform) : menu(Menu::buildMain()), platform(platform) {
     savedState = nullptr;
     renderer = nullptr;
+    audioStreamer = nullptr;
     platform.releaseAllInputs();
 }
 
@@ -16,7 +17,7 @@ App::~App() = default;
 
 bool App::initObject() {
     platform.onAppThreadStarted(this);
-    return createRenderer();
+    return createRenderer() && createAudioStreamer();
 }
 
 void App::killObject() {

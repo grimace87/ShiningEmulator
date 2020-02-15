@@ -7,6 +7,7 @@
 #include "../gbc/gbc.h"
 #include "../resource.h"
 #include "../appplatform.h"
+#include "../audiostreamer.h"
 #include "../messagedefs.h"
 #include "gbcui.h"
 
@@ -85,6 +86,12 @@ void GbcApp::processMsg(const Message& msg) {
 bool GbcApp::createRenderer() {
     renderer = new GbcRenderer(&platform, platform.newPlatformRenderer(), &gbc);
     renderer->startThread();
+    return true;
+}
+
+bool GbcApp::createAudioStreamer() {
+    audioStreamer = platform.newAudioStreamer(&gbc);
+    audioStreamer->start();
     return true;
 }
 

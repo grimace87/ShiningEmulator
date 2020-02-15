@@ -20,7 +20,8 @@ protected:
 public:
     WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd, HDC hDC, int width, int height);
     Menu mainMenu;
-    PlatformRenderer* newPlatformRenderer() override;
+    PlatformRenderer* newPlatformRenderer() final;
+    AudioStreamer* newAudioStreamer(Gbc* gbc) final;
     Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) override;
     Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) override;
     FILE* openFileInAppDir(std::string fileName, const char* mode) override;

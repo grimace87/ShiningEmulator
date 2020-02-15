@@ -6,6 +6,7 @@
 class AppState;
 class AppPlatform;
 class Renderer;
+class AudioStreamer;
 class Message;
 
 class App : public Thread {
@@ -29,6 +30,8 @@ public:
     void removeAllCursors();
 protected:
     Renderer* renderer;
+    AudioStreamer* audioStreamer;
     void processMsg(const Message& msg) override = 0;
     virtual bool createRenderer() = 0;
+    virtual bool createAudioStreamer() = 0;
 };

@@ -6,6 +6,7 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         app.cpp
         appplatform.cpp
         appstate.cpp
+        audiostreamer.cpp
         font.cpp
         ../lib/lodepng/lodepng.cpp
         ../lib/libxbr-standalone/xbr.cpp
@@ -26,6 +27,7 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         gbc/sgbmodule.cpp
         gbc/sram.cpp
         renderconfig.cpp
-        gbcapp/gbcui.cpp gbc/audiounit.cpp gbc/audiounit.h)
+        gbcapp/gbcui.cpp
+        gbc/audiounit.cpp)
 
 target_include_directories(SharedLib PRIVATE ../lib)
