@@ -50,11 +50,14 @@ void AndroidAudioStreamer::start() {
     RET_ERR_RES("Error opening stream: %s")
 
     // Set buffer size, must be a multiple of the burst size (official video says 2 times burst
-    // size is a sensible 'rule of thumb')
-    int32_t sensibleBufferSize = 2 * stream->getFramesPerBurst();
-    auto bufferSetResult = stream->setBufferSizeInFrames(sensibleBufferSize);
-    result = bufferSetResult.error();
-    RET_ERR_RES("Error setting buffer size: %s")
+    // size is a sensible 'rule of thumb').
+    // This function will return 'ErrorUnimplemented' if using OpenSL ES.
+    if (stream->getAudioApi() == oboe::AudioApi::AAudio) {
+        int32_t sensibleBufferSize = 2 * stream->getFramesPerBurst();
+        auto bufferSetResult = stream->setBufferSizeInFrames(sensibleBufferSize);
+        result = bufferSetResult.error();
+        RET_ERR_RES("Error setting buffer size: %s")
+    }
 
     setStream(stream);
     result = stream->requestStart();

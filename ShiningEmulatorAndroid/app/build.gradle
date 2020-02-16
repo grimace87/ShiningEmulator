@@ -1,6 +1,15 @@
 apply plugin: 'com.android.application'
 
 android {
+    signingConfigs {
+        release {
+            storeFile file('C:\\Users\\Thomas\\grimace_keystore.jks')
+            storePassword 'a7yt4jf83494ga4gua9w'
+            keyAlias = 'key0'
+            keyPassword 'ha8a4ya38y93ayf031rr'
+        }
+    }
+
     compileSdkVersion 29
     buildToolsVersion "29.0.2"
     defaultConfig {
@@ -21,6 +30,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     externalNativeBuild {
