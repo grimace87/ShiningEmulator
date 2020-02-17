@@ -29,8 +29,8 @@ class AndroidAppPlatform final : public AppPlatform {
     int redrawNeeded;
 	ANativeWindow* window;
     ARect pendingContentRect;
-	void handleKeyboardEvent(uint32_t keyCode, bool keyDown);
-	void handleGamepadInput(int32_t keyCode, bool keyDown);
+    int handleKeyboardEvent(uint32_t keyCode, bool keyDown);
+    int handleGamepadInput(int32_t keyCode, bool keyDown);
 
 protected:
 	bool onAppThreadStarted(App* app) override;
@@ -45,7 +45,7 @@ public:
 	void openDebugWindow(Gbc* gbc) override;
 	void withCurrentTime(std::function<void(struct tm*)> func) override;
 	void pollGamepad() override;
-	int32_t handleInputEvent(AInputEvent* event);
+	int handleInputEvent(AInputEvent* event);
 
 	AndroidAppPlatform(ANativeActivity* activity, ANativeWindow* window);
     ANativeActivity* activity;

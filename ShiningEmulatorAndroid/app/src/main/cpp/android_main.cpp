@@ -218,7 +218,7 @@ int processInputEvents(int fd, int events, void* data) {
                     continue;
                 }
                 auto platform = (AndroidAppPlatform*) &app->platform;
-                int32_t handled = platform->handleInputEvent(event);
+                int handled = platform->handleInputEvent(event);
                 AInputQueue_finishEvent(inputQueue, event, handled);
             }
         }

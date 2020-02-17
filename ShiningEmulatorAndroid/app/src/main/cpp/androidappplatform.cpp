@@ -138,7 +138,7 @@ void AndroidAppPlatform::withCurrentTime(std::function<void(struct tm*)> func) {
     func(localTime);
 }
 
-int32_t AndroidAppPlatform::handleInputEvent(AInputEvent* event) {
+int AndroidAppPlatform::handleInputEvent(AInputEvent* event) {
     int32_t source = AInputEvent_getSource(event);
     int32_t eventType = AInputEvent_getType(event);
     int32_t sourceClass = source & AINPUT_SOURCE_CLASS_MASK;
@@ -199,13 +199,13 @@ int32_t AndroidAppPlatform::handleInputEvent(AInputEvent* event) {
             gamepadInputs.isConnected = true;
             int32_t keyCode = AKeyEvent_getKeyCode(event);
             bool keyDown = AKeyEvent_getAction(event) == AKEY_EVENT_ACTION_DOWN;
-            handleGamepadInput(keyCode, keyDown);
-            return 1;
+            int handled = handleGamepadInput(keyCode, keyDown);
+            return handled;
         } else if (source == AINPUT_SOURCE_KEYBOARD) {
             int32_t keyCode = AKeyEvent_getKeyCode(event);
             bool keyDown = AKeyEvent_getAction(event) == AKEY_EVENT_ACTION_DOWN;
-            handleKeyboardEvent(keyCode, keyDown);
-            return 1;
+            int handled = handleKeyboardEvent(keyCode, keyDown);
+            return handled;
         }
     }
     return 0;
@@ -213,7 +213,7 @@ int32_t AndroidAppPlatform::handleInputEvent(AInputEvent* event) {
 
 void AndroidAppPlatform::pollGamepad() { }
 
-void AndroidAppPlatform::handleKeyboardEvent(uint32_t keyCode, bool keyDown) {
+int AndroidAppPlatform::handleKeyboardEvent(uint32_t keyCode, bool keyDown) {
     unsigned int mappedKeycode = 256;
     if (keyCode >= AKEYCODE_0 && keyCode <= AKEYCODE_9) {
         mappedKeycode = keyCode + 41;
@@ -234,15 +234,18 @@ void AndroidAppPlatform::handleKeyboardEvent(uint32_t keyCode, bool keyDown) {
             case AKEYCODE_DPAD_DOWN:
                 mappedKeycode = 40;
                 break;
-            default: ;
+            default:
+                return 0;
         }
     }
     if (keyCode < 128) {
         signalKey(mappedKeycode, keyDown);
+        return 1;
     }
+    return 0;
 }
 
-void AndroidAppPlatform::handleGamepadInput(int32_t keyCode, bool keyDown) {
+int AndroidAppPlatform::handleGamepadInput(int32_t keyCode, bool keyDown) {
     switch (keyCode) {
         case AKEYCODE_DPAD_LEFT:
             gamepadInputs.left = keyDown;
@@ -274,8 +277,10 @@ void AndroidAppPlatform::handleGamepadInput(int32_t keyCode, bool keyDown) {
         case AKEYCODE_BUTTON_A:
             gamepadInputs.actionBottom = keyDown;
             break;
-        default: ;
+        default:
+            return 0;
     }
+    return 1;
 }
 
 void AndroidAppPlatform::setJavaActivityClass(jclass klass) {
