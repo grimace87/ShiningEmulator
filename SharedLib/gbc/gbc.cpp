@@ -1251,10 +1251,6 @@ uint8_t Gbc::readIO(unsigned int ioIndex) {
             return 0;
         case 0x19: // NR24
             return ioPorts[0x19] & 0x40U;
-        case 0x1a: // NR30
-            return ioPorts[0x1a] & 0x80U;
-        case 0x1c: // NR32
-            return ioPorts[0x14] & 0x60U;
         case 0x1d: // NR33
             return 0;
         case 0x1e: // NR34
@@ -1405,28 +1401,40 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             }
             ioPorts[0x07] = data & 0x07U;
             return;
+        case 0x10:
+            ioPorts[0x10] = data & 0x7fU;
+            return;
         case 0x14: // NR14 (audio channel 1 initialisation)
-            ioPorts[0x14] = data & 0x47U;
+            ioPorts[0x14] = data & 0xc7U;
             if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel1(data);
+                audioUnit.startChannel1();
             }
             return;
         case 0x19: // NR24 (audio channel 2 initialisation)
-            ioPorts[0x19] = data & 0x47U;
+            ioPorts[0x19] = data & 0xc7U;
             if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel2(data);
+                audioUnit.startChannel2();
             }
+            return;
+        case 0x1a:
+            ioPorts[0x1a] = data & 0x80U;
+            return;
+        case 0x1c:
+            ioPorts[0x1c] = data & 0x60U;
             return;
         case 0x1e: // NR34 (audio channel 3 initialisation)
-            ioPorts[0x1e] = data & 0x80U;
+            ioPorts[0x1e] = data & 0xc7U;
             if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel3(data);
+                audioUnit.startChannel3();
             }
             return;
+        case 0x20:
+            ioPorts[0x20] = data & 0x3fU;
+            return;
         case 0x23: // NR44 (audio channel 4 initialisation)
-            ioPorts[0x23] = data & 0x40U;
+            ioPorts[0x23] = data & 0xc0U;
             if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel4(data);
+                audioUnit.startChannel4();
             }
             return;
         case 0x24: // NR50 (Vin audio enable and volume - not emulated)
@@ -1437,7 +1445,7 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             audioUnit.updateRoutingMasks();
             return;
         case 0x26: // NR52 (sound on/off)
-            byte = data & 0x80U;
+            byte = data & 0x8fU;
             if (byte == 0) {
                 ioPorts[0x26] = 0;
                 audioUnit.stopAllSound();

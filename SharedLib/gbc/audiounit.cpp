@@ -404,10 +404,10 @@ int16_t AudioUnit::getChannel4Signal() {
 //    return MUTE_VALUE;
 }
 
-void AudioUnit::startChannel1(uint8_t initByte) {
+void AudioUnit::startChannel1() {
 
     // Check running bit
-    s1Running = initByte & 0x80U;
+    s1Running = NR14 & 0x80U;
     if (!s1Running) {
         return;
     }
@@ -448,10 +448,10 @@ void AudioUnit::startChannel1(uint8_t initByte) {
     s1CurrentEnvelopeStepProgress = 0;
 }
 
-void AudioUnit::startChannel2(uint8_t initByte) {
+void AudioUnit::startChannel2() {
 
     // Check running bit
-    s2Running = initByte & 0x80U;
+    s2Running = NR24 & 0x80U;
     if (!s2Running) {
         return;
     }
@@ -482,10 +482,10 @@ void AudioUnit::startChannel2(uint8_t initByte) {
     s2CurrentEnvelopeStepProgress = 0;
 }
 
-void AudioUnit::startChannel3(uint8_t initByte) {
+void AudioUnit::startChannel3() {
 
     // Check running bit
-    s3Running = initByte & 0x80U;
+    s3Running = NR34 & 0x80U;
     if (!s3Running) {
         return;
     }
@@ -515,10 +515,10 @@ void AudioUnit::startChannel3(uint8_t initByte) {
     }
 }
 
-void AudioUnit::startChannel4(uint8_t initByte) {
+void AudioUnit::startChannel4() {
 
     // Check running bit
-    s4Running = initByte & 0x80U;
+    s4Running = NR44 & 0x80U;
     if (!s4Running) {
         return;
     }

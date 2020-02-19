@@ -118,10 +118,10 @@ public:
     void simulate(uint64_t clockTicks);
     void updateWaveformData(size_t ioIndex);
 
-    void startChannel1(uint8_t initByte);
-    void startChannel2(uint8_t initByte);
-    void startChannel3(uint8_t initByte);
-    void startChannel4(uint8_t initByte);
+    void startChannel1();
+    void startChannel2();
+    void startChannel3();
+    void startChannel4();
 
     void onAudioThreadNeedingData(int16_t* bufferPtr, uint32_t frameCount);
 };
