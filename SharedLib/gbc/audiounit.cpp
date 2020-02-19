@@ -368,23 +368,21 @@ void AudioUnit::simulateChannel4(size_t clockTicks) {
 }
 
 int16_t AudioUnit::getChannel1Signal() {
-    return 0;
     // TODO - Apply bias depending on duty cycle?
-//    if (s1Running) {
-//        int16_t baseAmplitude = s1CurrentDutyProgress < s1DutyOnLengthInTicks ? 128 : -128;
-//        return baseAmplitude * (int16_t)(s1EnvelopeValue << 4U);
-//    }
-//    return MUTE_VALUE;
+    if (s1Running) {
+        int16_t baseAmplitude = s1CurrentDutyProgress < s1DutyOnLengthInTicks ? 128 : -128;
+        return baseAmplitude * (int16_t)(s1EnvelopeValue << 4U);
+    }
+    return MUTE_VALUE;
 }
 
 int16_t AudioUnit::getChannel2Signal() {
-    return 0;
     // TODO - Apply bias depending on duty cycle?
-//    if (s2Running) {
-//        int16_t baseAmplitude = s2CurrentDutyProgress < s2DutyOnLengthInTicks ? 128 : -128;
-//        return baseAmplitude * (int16_t)(s2EnvelopeValue << 4U);
-//    }
-//    return MUTE_VALUE;
+    if (s2Running) {
+        int16_t baseAmplitude = s2CurrentDutyProgress < s2DutyOnLengthInTicks ? 128 : -128;
+        return baseAmplitude * (int16_t)(s2EnvelopeValue << 4U);
+    }
+    return MUTE_VALUE;
 }
 
 int16_t AudioUnit::getChannel3Signal() {
@@ -396,12 +394,11 @@ int16_t AudioUnit::getChannel3Signal() {
 
 // Get LFSR signal as one of two values (-128 or 128) and multiply by enveloped volume (0 to 240)
 int16_t AudioUnit::getChannel4Signal() {
-    return 0;
-//    if (s4Running) {
-//        int16_t lfsrSignal = (int16_t) (lfsr & 0x0001U) * 256 - 128;
-//        return lfsrSignal * (int16_t) (s4EnvelopeValue << 4U);
-//    }
-//    return MUTE_VALUE;
+    if (s4Running) {
+        int16_t lfsrSignal = (int16_t) (lfsr & 0x0001U) * 256 - 128;
+        return lfsrSignal * (int16_t) (s4EnvelopeValue << 4U);
+    }
+    return MUTE_VALUE;
 }
 
 void AudioUnit::startChannel1() {
