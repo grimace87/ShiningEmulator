@@ -402,6 +402,10 @@ void AudioUnit::restartChannel1() {
     if (NR14 & 0x80U) {
         s1Running = true;
         NR52 |= 0x01U;
+        s1CurrentDutyProgress = 0;
+        s1CurrentSweepProgress = 0;
+        s1CurrentLengthProgress = 0;
+        s1CurrentEnvelopeStepProgress = 0;
     } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x01U) == 0)) {
         stopChannel1();
         return;
@@ -411,7 +415,6 @@ void AudioUnit::restartChannel1() {
     s1DutyBits = NR11 >> 6U;
     size_t frequencyBits = ((size_t)(NR14 & 0x07U) << 8U) + (size_t)NR13;
     s1DutyPeriodInTicks = 32 * (2048 - frequencyBits);
-    s1CurrentDutyProgress = 0;
     switch (s1DutyBits) {
         case 0x0: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 8; break;
         case 0x1: s1DutyOnLengthInTicks = s1DutyPeriodInTicks / 4; break;
@@ -425,14 +428,12 @@ void AudioUnit::restartChannel1() {
     s1HasSweep = sweepTimeBits != 0;
     s1SweepIncreases = (NR10 & 0x08U) == 0;
     s1SweepPeriodInTicks = s1HasSweep ? GB_FREQ / (128 * (size_t)sweepTimeBits) : 8;
-    s1CurrentSweepProgress = 0;
     s1CurrentFrequency = GB_FREQ / s1DutyPeriodInTicks;
     s1FrequencyDivisor = 1U << (size_t)sweepAmountBits;
 
     // Set length parameters
     s1HasLength = NR14 & 0x40U;
     s1LengthInTicks = (64 - (size_t)(NR11 & 0x3FU)) * 16384;
-    s1CurrentLengthProgress = 0;
 
     // Set envelope parameters
     uint8_t stepSizeBits = NR12 & 0x07U;
@@ -440,7 +441,6 @@ void AudioUnit::restartChannel1() {
     s1HasEnvelope = stepSizeBits != 0;
     s1EnvelopeIncreases = NR12 & 0x08U;
     s1EnvelopeValue = NR12 >> 4U;
-    s1CurrentEnvelopeStepProgress = 0;
 }
 
 void AudioUnit::stopChannel2() {
@@ -454,6 +454,9 @@ void AudioUnit::restartChannel2() {
     if (NR24 & 0x80U) {
         s2Running = true;
         NR52 |= 0x02U;
+        s2CurrentDutyProgress = 0;
+        s2CurrentLengthProgress = 0;
+        s2CurrentEnvelopeStepProgress = 0;
     } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x02U) == 0)) {
         stopChannel2();
         return;
@@ -463,7 +466,6 @@ void AudioUnit::restartChannel2() {
     size_t dutyBits = NR21 >> 6U;
     size_t frequencyBits = ((size_t)(NR24 & 0x07U) << 8U) + (size_t)NR23;
     s2DutyPeriodInTicks = 32 * (2048 - frequencyBits);
-    s2CurrentDutyProgress = 0;
     switch (dutyBits) {
         case 0x0: s2DutyOnLengthInTicks = s2DutyPeriodInTicks / 8; break;
         case 0x1: s2DutyOnLengthInTicks = s2DutyPeriodInTicks / 4; break;
@@ -474,7 +476,6 @@ void AudioUnit::restartChannel2() {
     // Set length parameters
     s2HasLength = NR24 & 0x40U;
     s2LengthInTicks = (64 - (size_t)(NR21 & 0x3FU)) * 16384;
-    s2CurrentLengthProgress = 0;
 
     // Set envelope parameters
     uint8_t stepSizeBits = NR22 & 0x07U;
@@ -482,7 +483,6 @@ void AudioUnit::restartChannel2() {
     s2HasEnvelope = stepSizeBits != 0;
     s2EnvelopeIncreases = NR22 & 0x08U;
     s2EnvelopeValue = NR22 >> 4U;
-    s2CurrentEnvelopeStepProgress = 0;
 }
 
 void AudioUnit::stopChannel3() {
@@ -496,22 +496,21 @@ void AudioUnit::restartChannel3() {
     if (NR34 & 0x80U) {
         s3Running = true;
         NR52 |= 0x04U;
+        s3CurrentWaveformPosition = 0;
+        s3CurrentLengthProgress = 0;
+        s3CurrentProgress = 0;
     } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x04U) == 0)) {
         stopChannel3();
         return;
     }
 
-    s3CurrentWaveformPosition = 0;
-
     // Set length parameters
     s3HasLength = NR34 & 0x40U;
     s3LengthInTicks = (256 - (size_t)(NR31 & 0x3FU)) * 16384;
-    s3CurrentLengthProgress = 0;
 
     // Set period parameters
     size_t frequencyBits = ((size_t)(NR34 & 0x07U) << 8U) + (size_t)NR33;
     s3PeriodInTicks = 32 * (2048 - frequencyBits);
-    s3CurrentProgress = 0;
 
     // Set volume
     uint8_t volumeBits = (NR32 & 0x60U) >> 5U;
@@ -537,6 +536,9 @@ void AudioUnit::restartChannel4() {
     if (NR44 & 0x80U) {
         s4Running = true;
         NR52 |= 0x08U;
+        s4ShiftProgress = 0;
+        s4CurrentLengthProgress = 0;
+        s4CurrentEnvelopeStepProgress = 0;
     } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x08U) == 0)) {
         stopChannel4();
         return;
@@ -557,12 +559,10 @@ void AudioUnit::restartChannel4() {
 
     s4ShiftFeedbackMask = (NR43 & 0x08U) ? 0x4040U : 0x4000U;
     s4ShiftPeriod = basePeriod << bitShift;
-    s4ShiftProgress = 0;
 
     // Set length parameters
     s4HasLength = NR44 & 0x40U;
     s4LengthInTicks = (64 - (size_t)(NR41 & 0x3FU)) * 16384;
-    s4CurrentLengthProgress = 0;
 
     // Set envelope parameters
     uint8_t stepSizeBits = NR42 & 0x07U;
@@ -570,7 +570,6 @@ void AudioUnit::restartChannel4() {
     s4HasEnvelope = stepSizeBits != 0;
     s4EnvelopeIncreases = NR42 & 0x08U;
     s4EnvelopeValue = NR42 >> 4U;
-    s4CurrentEnvelopeStepProgress = 0;
 }
 
 void AudioUnit::onAudioThreadNeedingData(int16_t* dstBuffer, uint32_t frameCount) {

@@ -4,6 +4,7 @@
 - Save states generally do nothing good
 - Frames shown out of order when running at high speed
 - Audio with duty cycle could possibly have bias set to offset non-zero average
+- SGB games have stuttered audio
 
 ### Windows
 
