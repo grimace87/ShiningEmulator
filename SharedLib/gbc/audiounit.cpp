@@ -39,6 +39,7 @@ AudioUnit::AudioUnit() {
     cumulativeTicks = 0;
     buffer = new Sample[AUDIO_BUFFER_SIZE_FRAMES];
     globalAudioEnable = false;
+    baseRunningSpeed = GB_FREQ;
 
     out1Generator1 = 0;
     out1Generator2 = 0;
@@ -124,10 +125,11 @@ AudioUnit::~AudioUnit() {
     delete[] buffer;
 }
 
-void AudioUnit::reset(uint8_t* gbcPorts) {
+void AudioUnit::reset(uint8_t* gbcPorts, int64_t runningSpeed) {
     bufferWriteHead = 0;
     bufferReadHead = 0;
     ioPorts = gbcPorts;
+    baseRunningSpeed = runningSpeed;
 
     // TODO - Initialise sound parameters based on initial values in ioPorts
     stopAllSound();
@@ -166,7 +168,7 @@ void AudioUnit::simulate(uint64_t clockTicks) {
 
     // Convert between cumulative clock ticks at the CPU's frequency to the emulated audio sample rate
     cumulativeTicks += clockTicks;
-    auto endPosition = (size_t)((SAMPLE_RATE / GB_FREQ) * (double)cumulativeTicks);
+    auto endPosition = (size_t)((SAMPLE_RATE / (double)baseRunningSpeed) * (double)cumulativeTicks);
 
     // Wrap head position within buffer
     endPosition %= AUDIO_BUFFER_SIZE_FRAMES;

@@ -508,7 +508,7 @@ void Gbc::reset() {
     }
 
     // Other stuff:
-    audioUnit.reset(ioPorts);
+    audioUnit.reset(ioPorts, cpuClockFreq);
     serialTimer = 0;
     cpuDividerCount = 0;
     cpuTimerCount = 0;
