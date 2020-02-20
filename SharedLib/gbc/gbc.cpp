@@ -1406,15 +1406,11 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             return;
         case 0x14: // NR14 (audio channel 1 initialisation)
             ioPorts[0x14] = data & 0xc7U;
-            if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel1();
-            }
+            audioUnit.restartChannel1();
             return;
         case 0x19: // NR24 (audio channel 2 initialisation)
             ioPorts[0x19] = data & 0xc7U;
-            if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel2();
-            }
+            audioUnit.restartChannel2();
             return;
         case 0x1a:
             ioPorts[0x1a] = data & 0x80U;
@@ -1424,18 +1420,14 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             return;
         case 0x1e: // NR34 (audio channel 3 initialisation)
             ioPorts[0x1e] = data & 0xc7U;
-            if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel3();
-            }
+            audioUnit.restartChannel3();
             return;
         case 0x20:
             ioPorts[0x20] = data & 0x3fU;
             return;
         case 0x23: // NR44 (audio channel 4 initialisation)
             ioPorts[0x23] = data & 0xc0U;
-            if ((data & 0x80U) && (ioPorts[0x26])) {
-                audioUnit.startChannel4();
-            }
+            audioUnit.restartChannel4();
             return;
         case 0x24: // NR50 (Vin audio enable and volume - not emulated)
             ioPorts[0x24] = data;
@@ -1445,7 +1437,7 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             audioUnit.updateRoutingMasks();
             return;
         case 0x26: // NR52 (sound on/off)
-            byte = data & 0x8fU;
+            byte = data & 0x80U;
             if (byte == 0) {
                 ioPorts[0x26] = 0;
                 audioUnit.stopAllSound();

@@ -1,7 +1,6 @@
 #include "audiounit.h"
 
 #include <cstdio>
-#include <algorithm>
 
 #define GB_FREQ  4194304
 
@@ -149,13 +148,13 @@ void AudioUnit::reenableAudio() {
 void AudioUnit::updateRoutingMasks() {
     uint8_t flags = NR51;
     out1Generator1 = (int16_t)(flags & 0x01U);
-    out1Generator2 = (int16_t)((flags & 0x02U) >> 1);
-    out1Generator3 = (int16_t)((flags & 0x04U) >> 2);
-    out1Generator4 = (int16_t)((flags & 0x08U) >> 3);
-    out2Generator1 = (int16_t)((flags & 0x10U) >> 4);
-    out2Generator2 = (int16_t)((flags & 0x20U) >> 5);
-    out2Generator3 = (int16_t)((flags & 0x40U) >> 6);
-    out2Generator4 = (int16_t)((flags & 0x80U) >> 7);
+    out1Generator2 = (int16_t)((flags & 0x02U) >> 1U);
+    out1Generator3 = (int16_t)((flags & 0x04U) >> 2U);
+    out1Generator4 = (int16_t)((flags & 0x08U) >> 3U);
+    out2Generator1 = (int16_t)((flags & 0x10U) >> 4U);
+    out2Generator2 = (int16_t)((flags & 0x20U) >> 5U);
+    out2Generator3 = (int16_t)((flags & 0x40U) >> 6U);
+    out2Generator4 = (int16_t)((flags & 0x80U) >> 7U);
 }
 
 void AudioUnit::simulate(uint64_t clockTicks) {
@@ -208,8 +207,7 @@ void AudioUnit::simulateChannel1(size_t clockTicks) {
             if (s1SweepIncreases) {
                 s1CurrentFrequency += s1CurrentFrequency / s1FrequencyDivisor;
                 if (s1CurrentFrequency > 0x07ffU) {
-                    s1Running = false;
-                    NR52 &= 0xfeU;
+                    stopChannel1();
                     return;
                 }
                 s1SweepPeriodInTicks = GB_FREQ / s1CurrentFrequency;
@@ -235,9 +233,7 @@ void AudioUnit::simulateChannel1(size_t clockTicks) {
     if (s1HasLength) {
         s1CurrentLengthProgress += clockTicks;
         if (s1CurrentLengthProgress >= s1LengthInTicks) {
-            s1HasLength = false;
-            s1Running = false;
-            NR52 &= 0xfeU;
+            stopChannel1();
             return;
         }
     }
@@ -273,9 +269,7 @@ void AudioUnit::simulateChannel2(size_t clockTicks) {
     if (s2HasLength) {
         s2CurrentLengthProgress += clockTicks;
         if (s2CurrentLengthProgress >= s2LengthInTicks) {
-            s2HasLength = false;
-            s2Running = false;
-            NR52 &= 0xfdU;
+            stopChannel2();
             return;
         }
     }
@@ -312,9 +306,7 @@ void AudioUnit::simulateChannel3(size_t clockTicks) {
     if (s3HasLength) {
         s3CurrentLengthProgress += clockTicks;
         if (s3CurrentLengthProgress >= s3LengthInTicks) {
-            s3HasLength = false;
-            s3Running = false;
-            NR52 &= 0xfbU;
+            stopChannel3();
             return;
         }
     }
@@ -342,9 +334,7 @@ void AudioUnit::simulateChannel4(size_t clockTicks) {
     if (s4HasLength) {
         s4CurrentLengthProgress += clockTicks;
         if (s4CurrentLengthProgress >= s4LengthInTicks) {
-            s4HasLength = false;
-            s4Running = false;
-            NR52 &= 0xf7U;
+            stopChannel4();
             return;
         }
     }
@@ -401,11 +391,19 @@ int16_t AudioUnit::getChannel4Signal() {
     return MUTE_VALUE;
 }
 
-void AudioUnit::startChannel1() {
+void AudioUnit::stopChannel1() {
+    s1Running = false;
+    NR52 &= 0xfeU;
+}
+
+void AudioUnit::restartChannel1() {
 
     // Check running bit
-    s1Running = NR14 & 0x80U;
-    if (!s1Running) {
+    if (NR14 & 0x80U) {
+        s1Running = true;
+        NR52 |= 0x01U;
+    } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x01U) == 0)) {
+        stopChannel1();
         return;
     }
 
@@ -445,11 +443,19 @@ void AudioUnit::startChannel1() {
     s1CurrentEnvelopeStepProgress = 0;
 }
 
-void AudioUnit::startChannel2() {
+void AudioUnit::stopChannel2() {
+    s2Running = false;
+    NR52 &= 0xfdU;
+}
+
+void AudioUnit::restartChannel2() {
 
     // Check running bit
-    s2Running = NR24 & 0x80U;
-    if (!s2Running) {
+    if (NR24 & 0x80U) {
+        s2Running = true;
+        NR52 |= 0x02U;
+    } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x02U) == 0)) {
+        stopChannel2();
         return;
     }
 
@@ -479,11 +485,19 @@ void AudioUnit::startChannel2() {
     s2CurrentEnvelopeStepProgress = 0;
 }
 
-void AudioUnit::startChannel3() {
+void AudioUnit::stopChannel3() {
+    s3Running = false;
+    NR52 &= 0xfbU;
+}
+
+void AudioUnit::restartChannel3() {
 
     // Check running bit
-    s3Running = NR34 & 0x80U;
-    if (!s3Running) {
+    if (NR34 & 0x80U) {
+        s3Running = true;
+        NR52 |= 0x04U;
+    } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x04U) == 0)) {
+        stopChannel3();
         return;
     }
 
@@ -512,11 +526,19 @@ void AudioUnit::startChannel3() {
     }
 }
 
-void AudioUnit::startChannel4() {
+void AudioUnit::stopChannel4() {
+    s4Running = false;
+    NR52 &= 0xf7U;
+}
+
+void AudioUnit::restartChannel4() {
 
     // Check running bit
-    s4Running = NR44 & 0x80U;
-    if (!s4Running) {
+    if (NR44 & 0x80U) {
+        s4Running = true;
+        NR52 |= 0x08U;
+    } else if (((NR52 & 0x80U) == 0) || ((NR52 & 0x08U) == 0)) {
+        stopChannel4();
         return;
     }
 

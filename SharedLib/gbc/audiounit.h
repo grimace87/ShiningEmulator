@@ -103,10 +103,13 @@ class AudioUnit {
     int16_t getChannel2Signal();
     int16_t getChannel3Signal();
     int16_t getChannel4Signal();
+    inline void stopChannel1();
+    inline void stopChannel2();
+    inline void stopChannel3();
+    inline void stopChannel4();
 
     void writeAudioBuffer(Sample* dstBuffer, uint32_t frameCount);
     static void muteExternalBufferFrames(Sample* dstBuffer, uint32_t frameCount);
-
 
 public:
     AudioUnit();
@@ -118,10 +121,10 @@ public:
     void simulate(uint64_t clockTicks);
     void updateWaveformData(size_t ioIndex);
 
-    void startChannel1();
-    void startChannel2();
-    void startChannel3();
-    void startChannel4();
+    void restartChannel1();
+    void restartChannel2();
+    void restartChannel3();
+    void restartChannel4();
 
     void onAudioThreadNeedingData(int16_t* bufferPtr, uint32_t frameCount);
 };
