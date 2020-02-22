@@ -14,10 +14,6 @@
 
 - Save files seem to disappear unexpectedly sometimes
 
-#### From Wario Land (SML3)
-
-- First level, coins and stunned enemies have sprites with some incorrect vertical flippage
-
 #### From Donkey Kong Land 2
 
 - The demo shown by waiting on the title screen crashes at a precise point
@@ -26,4 +22,4 @@
 
 #### From Oracle of Ages & Oracle of Seasons
 
-- Game doesn't progress past Capcom logo - audio playing indefinitely
+- Game doesn't progress past somewhere in the opening screens

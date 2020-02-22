@@ -1925,7 +1925,9 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             // Adjust Y if vertically flipping (inverts which of the two tiles to use also)
             if (spriteFlags & 0x40U) {
                 pixY = 7 - pixY;
-                tileNo ^= 0x01U;
+                if (largeSprites) {
+                    tileNo ^= 0x01U;
+                }
             }
 
             // Get priority flag
@@ -2151,7 +2153,9 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
             // Adjust Y if vertically flipping (inverts which of the two tiles to use also)
             if (spriteFlags & 0x40U) {
                 pixY = 7 - pixY;
-                tileNo ^= 0x01U;
+                if (largeSprites) {
+                    tileNo ^= 0x01U;
+                }
             }
 
             // Get priority flag
@@ -2494,7 +2498,9 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             // Adjust Y if vertically flipping (inverts which of the two tiles to use also)
             if (spriteFlags & 0x40U) {
                 pixY = 7 - pixY;
-                tileNo ^= 0x01U;
+                if (largeSprites) {
+                    tileNo ^= 0x01U;
+                }
             }
 
             // Get priority flag
