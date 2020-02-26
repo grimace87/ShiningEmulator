@@ -820,7 +820,11 @@ uint8_t Gbc::read8(unsigned int address) {
     if (debugger.breakOnRead) {
         if (address == debugger.breakReadAddr) {
             debugger.setBreakCode(DebugWindowModule::BreakCode::READ_FROM_ADDRESS);
+
+            // Recall read function, prevent recursive calls
+            debugger.breakOnRead = false;
             debugger.breakReadByte = (unsigned int)read8(address);
+            debugger.breakOnRead = true;
         }
     }
 #endif
@@ -973,6 +977,7 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                         byte++;
                     }
                     bankOffset |= ((unsigned int)byte * 0x4000U);
+                    bankOffset &= (romProperties.bankSelectMask * 0x4000U);
                     return;
                 } else if (address < 0x6000U) {
                     byte &= 0x03U;
@@ -981,6 +986,7 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                     } else {
                         bankOffset &= 0xffe7c000U;
                         bankOffset |= (unsigned int)byte * 0x80000U;
+                        bankOffset &= (romProperties.bankSelectMask * 0x4000U);
                     }
                     return;
                 } else {
