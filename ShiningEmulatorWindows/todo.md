@@ -16,10 +16,12 @@
 
 #### From Donkey Kong Land 2
 
-- The demo shown by waiting on the title screen crashes at a precise point
 - Graphics are corrupted by loading while emulated VRAM is inaccessible
-- Touching an enemy wrong or picking up a barrel crashes
-- Changing characters also crashes
+- After letting title screen go on for a while the audio channel balance is clearly not right
+
+#### From Link's Awakening
+
+- Feather sound effect is... not right somehow
 
 #### From Oracle of Ages & Oracle of Seasons
 
@@ -29,3 +31,8 @@
 
 - Shooting ranges lag noticeably
 - Sprite visibility very inconsistent
+- Loading a save after progressing some way into training seems to crash
+
+#### Wario Land 3
+
+- Save games after reaching a certain amount of progress do not load
