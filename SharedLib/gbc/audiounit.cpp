@@ -393,11 +393,6 @@ int16_t AudioUnit::getChannel4Signal() {
     return MUTE_VALUE;
 }
 
-void AudioUnit::stopChannel1() {
-    s1Running = false;
-    NR52 &= 0xfeU;
-}
-
 void AudioUnit::restartChannel1() {
 
     // Check running bit
@@ -445,11 +440,6 @@ void AudioUnit::restartChannel1() {
     s1EnvelopeValue = NR12 >> 4U;
 }
 
-void AudioUnit::stopChannel2() {
-    s2Running = false;
-    NR52 &= 0xfdU;
-}
-
 void AudioUnit::restartChannel2() {
 
     // Check running bit
@@ -487,11 +477,6 @@ void AudioUnit::restartChannel2() {
     s2EnvelopeValue = NR22 >> 4U;
 }
 
-void AudioUnit::stopChannel3() {
-    s3Running = false;
-    NR52 &= 0xfbU;
-}
-
 void AudioUnit::restartChannel3() {
 
     // Check running bit
@@ -525,11 +510,10 @@ void AudioUnit::restartChannel3() {
     if ((NR30 & 0x80U) == 0) {
         s3VolumeMultiplier = 0;
     }
-}
 
-void AudioUnit::stopChannel4() {
-    s4Running = false;
-    NR52 &= 0xf7U;
+    if (volumeBits == 0) {
+        stopChannel3();
+    }
 }
 
 void AudioUnit::restartChannel4() {

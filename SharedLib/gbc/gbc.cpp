@@ -1419,7 +1419,11 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             audioUnit.restartChannel2();
             return;
         case 0x1a:
-            ioPorts[0x1a] = data & 0x80U;
+            byte = data & 0x80U;
+            ioPorts[0x1a] = byte;
+            if (byte == 0x00U) {
+                audioUnit.stopChannel3();
+            }
             return;
         case 0x1c:
             ioPorts[0x1c] = data & 0x60U;

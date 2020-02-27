@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#define NR52 ioPorts[0x26]
+
 struct Sample{
     int16_t left;
     int16_t right;
@@ -104,10 +106,6 @@ class AudioUnit {
     int16_t getChannel2Signal();
     int16_t getChannel3Signal();
     int16_t getChannel4Signal();
-    inline void stopChannel1();
-    inline void stopChannel2();
-    inline void stopChannel3();
-    inline void stopChannel4();
 
     void writeAudioBuffer(Sample* dstBuffer, uint32_t frameCount);
     static void muteExternalBufferFrames(Sample* dstBuffer, uint32_t frameCount);
@@ -121,6 +119,23 @@ public:
     void updateRoutingMasks();
     void simulate(uint64_t clockTicks);
     void updateWaveformData(size_t ioIndex);
+
+    inline void stopChannel1() {
+        s1Running = false;
+        NR52 &= 0xfeU;
+    }
+    inline void stopChannel2() {
+        s2Running = false;
+        NR52 &= 0xfdU;
+    }
+    inline void stopChannel3() {
+        s3Running = false;
+        NR52 &= 0xfbU;
+    }
+    inline void stopChannel4() {
+        s4Running = false;
+        NR52 &= 0xf7U;
+    }
 
     void restartChannel1();
     void restartChannel2();
