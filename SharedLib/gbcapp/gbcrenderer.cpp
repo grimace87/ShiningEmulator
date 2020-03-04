@@ -19,7 +19,7 @@
 GbcRenderer::GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* gbc) :
         Renderer(appPlatform, platformRenderer), gbc(gbc), windowTextureHandle(0) {
     this->frameState = new GbcAppState();
-    this->showUi = appPlatform->usesTouch;
+    this->showFullUi = appPlatform->usesTouch;
 }
 
 GbcRenderer::~GbcRenderer() = default;
@@ -112,6 +112,15 @@ bool GbcRenderer::initObject() {
     RenderConfig config4 = RenderConfig::makeStandardConfig(*mainShader, *platformRenderer, mainTexture, gameHudVbo, 0, floatsForGameHud / 5);
     RenderConfig config5 = RenderConfig::makeStandardConfig(*mainShader, *platformRenderer, windowTextureHandle, windowVbo, 0, windowFloatCount / 5);
 
+    // Modify the HUD config according to how much ought to be shown
+    if (showFullUi) {
+        config4.startVertex = 0;
+        config4.vertexCount = 78;
+    } else {
+        config4.startVertex = 54;
+        config4.vertexCount = 24;
+    }
+
     // Create the frame config objects
     FrameConfig mainConfig;
     mainConfig.shader = mainShader;
@@ -194,14 +203,11 @@ void GbcRenderer::doWork() {
 
                 // Set uniforms for the heads-up display rectangles
                 firstConfig = 2;
-                configCount = 1;
+                configCount = 2;
                 auto& windowConfig = frameConfigs[FCT::GAME_WINDOW];
                 TextureShader::prepareConfig(windowConfig.renderConfigs[RCT::GAME_WINDOW], 0, glm::value_ptr(mainMvpMatrix));
-                //if (appPlatform->usesTouch) {
-                    auto &hudConfig = frameConfigs[FCT::GAME_HUD];
-                    TextureShader::prepareConfig(hudConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
-                    configCount++;
-                //}
+                auto &hudConfig = frameConfigs[FCT::GAME_HUD];
+                TextureShader::prepareConfig(hudConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
 
                 framePrepared = true;
             }

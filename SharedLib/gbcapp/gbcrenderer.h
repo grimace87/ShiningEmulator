@@ -27,6 +27,7 @@ namespace RCT {
 class GbcRenderer : public Renderer {
     unsigned int windowTextureHandle;
     Gbc* gbc;
+    bool showFullUi;
 protected:
     bool initObject() override;
     void doWork() override;
@@ -35,6 +36,5 @@ public:
     ~GbcRenderer() override;
     std::vector<TextButton> uiButtons;
     std::vector<Image> gameplayButtons;
-    bool showUi;
 };
 
