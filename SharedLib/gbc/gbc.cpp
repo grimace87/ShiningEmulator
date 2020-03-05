@@ -79,13 +79,6 @@ Gbc::Gbc() {
     sgb.palettes = new uint32_t[4 * 4];
     sgb.sysPalettes = new uint32_t[512 * 4]; // 512 palettes, 4 colours per palette, RGB
     sgb.chrPalettes = new uint32_t[18 * 20];
-
-    // Clear things that should be cleared
-    std::fill(tileSet, tileSet + 2 * 384 * 8 * 8, 0);
-    std::fill(sgb.monoData, sgb.monoData + 160 * 152, 0);
-    std::fill(sgb.palettes, sgb.palettes + 4 * 4, 0);
-    std::fill(sgb.sysPalettes, sgb.sysPalettes + 512 * 4, 0);
-    std::fill(sgb.chrPalettes, sgb.chrPalettes + 18 * 20, 0);
 }
 
 Gbc::~Gbc() {
@@ -424,6 +417,13 @@ void Gbc::reset() {
 #ifdef _WIN32
 	debugger.setBreakCode(DebugWindowModule::BreakCode::NONE);
 #endif
+
+    // Clear graphic caches
+    std::fill(tileSet, tileSet + 2 * 384 * 8 * 8, 0);
+    std::fill(sgb.monoData, sgb.monoData + 160 * 152, 0);
+    std::fill(sgb.palettes, sgb.palettes + 4 * 4, 0);
+    std::fill(sgb.sysPalettes, sgb.sysPalettes + 512 * 4, 0);
+    std::fill(sgb.chrPalettes, sgb.chrPalettes + 18 * 20, 0);
 
     // Resetting IO ports may avoid graphical glitches when switching to a colour game. Clearing VRAM may help too.
     std::fill(ioPorts, ioPorts + 256, 0);
@@ -1106,8 +1106,8 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                 // Get the pair of bytes just modified (i.e. one row in the character)
                 // Note there are 384 characters in the map, per VRAM bank, each stored with 16 bytes
                 size_t relativeVramAddress = address & 0x1ffeU;
-                uint32_t byte1 = 0xffU & (uint32_t)vram[vramBankOffset + relativeVramAddress];
-                uint32_t byte2 = 0xffU & (uint32_t)vram[vramBankOffset + relativeVramAddress + 1];
+                uint32_t byte1 = 0x000000ffU & (uint32_t)vram[vramBankOffset + relativeVramAddress];
+                uint32_t byte2 = 0x000000ffU & (uint32_t)vram[vramBankOffset + relativeVramAddress + 1];
 
                 // Find the address into decoded data to update now
                 // The output format uses 64 bytes per tile rather than 16, hence input address * 4
@@ -1115,6 +1115,7 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                 if (vramBankOffset) {
                     outputAddress += 24576;
                 }
+                const auto adrrrr = outputAddress;
                 tileSet[outputAddress++] = ((byte2 >> 6U) & 0x02U) + (byte1 >> 7U);
                 tileSet[outputAddress++] = ((byte2 >> 5U) & 0x02U) + ((byte1 >> 6U) & 0x01U);
                 tileSet[outputAddress++] = ((byte2 >> 4U) & 0x02U) + ((byte1 >> 5U) & 0x01U);
@@ -1123,6 +1124,13 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                 tileSet[outputAddress++] = ((byte2 >> 1U) & 0x02U) + ((byte1 >> 2U) & 0x01U);
                 tileSet[outputAddress++] = (byte2 & 0x02U) + ((byte1 >> 1U) & 0x01U);
                 tileSet[outputAddress] = ((byte2 << 1U) & 0x02U) + (byte1 & 0x01U);
+
+                // Verify integrity
+                for (uint32_t indixxx = 0; indixxx < 8; indixxx++) {
+                    if (tileSet[adrrrr + indixxx] > 0x000000ffU) {
+                        tileSet[adrrrr + indixxx] = 0;
+                    }
+                }
             }
         }
     } else if (address < 0xc000U) {
@@ -1739,7 +1747,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     unsigned int pixX, pixY, tileX, tileY;
     unsigned int pixelNo = 0;
     uint32_t* dstPointer;
-    uint32_t* tileSetPointer;
+    const uint32_t* tileSetPointer;
 
     // Sprite-specific stuff:
     unsigned int paletteOffset;
@@ -1768,7 +1776,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         // Draw first 20 tiles (including partial leftmost tile)
         for (offset = 0; offset < 20; offset++) {
             // Get tile no. and point to the tileset data to read
-            unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+            unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
             // Draw up to 8 pixels of this tile
@@ -1788,7 +1796,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         max = scrX % 8;
 
         // Get tile no
-        unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+        unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
         tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
         // Draw up to 8 pixels of this tile
@@ -1826,7 +1834,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         // Draw all the complete tiles until the end of the line
         for (offset = 0; offset < max; offset++) {
             // Get tile no
-            unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+            unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
             // Draw the 8 pixels of this tile
@@ -1843,14 +1851,14 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         }
 
         // Draw partial last tile. Find out how many pixels of it to draw.
-        max = scrX % 8;
+        max = (unsigned int)((168 - scrX) % 8);
 
         // Get tile no
-        unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+        unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
         tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
         // Draw up to 8 pixels of this tile
-        while (pixX < offset) {
+        while (pixX < max) {
             uint32_t colourIndex = *tileSetPointer++;
             *dstPointer++ = translatedPaletteBg[colourIndex];
             spriteBlockingMask[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
@@ -1983,7 +1991,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
     unsigned int offset, max;
     unsigned int pixX, pixY, tileX, tileY;
     uint32_t* dstPointer;
-    uint32_t* tileSetPointer;
+    const uint32_t* tileSetPointer;
 
     // Sprite-specific stuff:
     unsigned int paletteOffset;
@@ -2003,7 +2011,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
         // Draw first 20 tiles (including partial leftmost tile)
         for (offset = 0; offset < 20; offset++) {
             // Get tile no. and point to the tileset data to read
-            unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+            unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
             // Draw up to 8 pixels of this tile
@@ -2021,7 +2029,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
         max = scrX % 8;
 
         // Get tile no
-        unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+        unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
         tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
         // Draw up to 8 pixels of this tile
@@ -2056,7 +2064,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
         // Draw all the complete tiles until the end of the line
         for (offset = 0; offset < max; offset++) {
             // Get tile no
-            unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+            unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
             // Draw the 8 pixels of this tile
@@ -2072,14 +2080,14 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
         }
 
         // Draw partial last tile. Find out how many pixels of it to draw.
-        max = scrX % 8;
+        max = (unsigned int)((168 - scrX) % 8);
 
         // Get tile no
-        unsigned int tileNo = (vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
+        unsigned int tileNo = ((unsigned int)vram[tileMapBase + 32 * tileY + tileX] ^ tileSetIndexInverter) + tileSetIndexOffset;
         tileSetPointer = &tileSet[tileNo * 64 + 8 * pixY + pixX];
 
         // Draw up to 8 pixels of this tile
-        while (pixX < offset) {
+        while (pixX < max) {
             *dstPointer++ = sgbPaletteTranslationBg[*tileSetPointer++];
             pixX++;
         }
@@ -2209,7 +2217,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
     unsigned int pixX, pixY, tileX, tileY;
     unsigned int pixelNo = 0;
     uint32_t* dstPointer;
-    uint32_t* tileSetPointer;
+    const uint32_t* tileSetPointer;
 
     // Sprite-specific stuff:
     unsigned int paletteOffset;
@@ -2239,7 +2247,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         for (offset = 0; offset < 20; offset++) {
             // Get tile no. and point to the tileset data to read
             unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
-            unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
+            unsigned int tileNo = ((unsigned int)vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
             unsigned int tileParams = vram[0x2000U + tileMapIndex];
             unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
             if (tileParams & 0x0008U) {
@@ -2284,7 +2292,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
 
         // Get tile no
         unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
-        unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
+        unsigned int tileNo = ((unsigned int)vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
         unsigned int tileParams = vram[0x2000U + tileMapIndex];
         unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
         if (tileParams & 0x0008U) {
@@ -2347,7 +2355,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         for (offset = 0; offset < max; offset++) {
             // Get tile no
             unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
-            unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
+            unsigned int tileNo = ((unsigned int)vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
             unsigned int tileParams = vram[0x2000U + tileMapIndex];
             unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
             if (tileParams & 0x0008U) {
@@ -2388,11 +2396,11 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
         }
 
         // Draw partial last tile. Find out how many pixels of it to draw.
-        max = scrX % 8;
+        max = (unsigned int)((168 - scrX) % 8);
 
         // Get tile no
         unsigned int tileMapIndex = tileMapBase + 32 * tileY + tileX;
-        unsigned int tileNo = (vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
+        unsigned int tileNo = ((unsigned int)vram[tileMapIndex] ^ tileSetIndexInverter) + tileSetIndexOffset;
         unsigned int tileParams = vram[0x2000U + tileMapIndex];
         unsigned int adjustedY = tileParams & 0x0040U ? 7 - pixY : pixY;
         if (tileParams & 0x0008U) {
@@ -2412,14 +2420,14 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             // Flipped horizontally
             unsigned int drawnX = 7 - pixX;
             tileSetPointer = &tileSet[tileNo * 64 + 8 * adjustedY + drawnX];
-            while (pixX < offset) {
+            while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer--;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
                 spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
                 pixX++;
             }
         } else {
-            while (pixX < offset) {
+            while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
                 spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
