@@ -1124,13 +1124,6 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                 tileSet[outputAddress++] = ((byte2 >> 1U) & 0x02U) + ((byte1 >> 2U) & 0x01U);
                 tileSet[outputAddress++] = (byte2 & 0x02U) + ((byte1 >> 1U) & 0x01U);
                 tileSet[outputAddress] = ((byte2 << 1U) & 0x02U) + (byte1 & 0x01U);
-
-                // Verify integrity
-                for (uint32_t indixxx = 0; indixxx < 8; indixxx++) {
-                    if (tileSet[adrrrr + indixxx] > 0x000000ffU) {
-                        tileSet[adrrrr + indixxx] = 0;
-                    }
-                }
             }
         }
     } else if (address < 0xc000U) {
