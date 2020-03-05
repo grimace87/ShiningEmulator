@@ -1115,7 +1115,6 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                 if (vramBankOffset) {
                     outputAddress += 24576;
                 }
-                const auto adrrrr = outputAddress;
                 tileSet[outputAddress++] = ((byte2 >> 6U) & 0x02U) + (byte1 >> 7U);
                 tileSet[outputAddress++] = ((byte2 >> 5U) & 0x02U) + ((byte1 >> 6U) & 0x01U);
                 tileSet[outputAddress++] = ((byte2 >> 4U) & 0x02U) + ((byte1 >> 5U) & 0x01U);
