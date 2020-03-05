@@ -318,6 +318,10 @@ bool Gbc::loadRom(std::string fileName, const uint8_t* data, int dataLength, App
             romProperties.sizeBytes = 4194304;
             romProperties.bankSelectMask = 0xff;
             break;
+        case 0x08:
+            romProperties.sizeBytes = 8388608;
+            romProperties.bankSelectMask = 0x1ff;
+            break;
         case 0x52:
             romProperties.sizeBytes = 1179648;
             romProperties.bankSelectMask = 0x7fU;
@@ -1065,28 +1069,20 @@ void Gbc::write8(unsigned int address, uint8_t byte) {
                     sram.enableFlag = byte == 0x0aU;
                     return;
                 } else if (address < 0x3000U) {
-                    // ROMB0 - lower 8 bits of 9-bit ROM bank
+                    // ROMB0 - lower 8 bits of 9-bit ROM bank (note MBC5 can select bank 0 here)
                     uint32_t maskedByte = byte & romProperties.bankSelectMask;
                     bankOffset &= 0x00400000U;
-                    bankOffset |= maskedByte * 0x4000U;
-                    if (bankOffset == 0) {
-                        // Cannot set bank 0 - use default of 1
-                        bankOffset = 0x4000U;
-                    }
+                    bankOffset |= (maskedByte * 0x4000U);
                     return;
                 }
                 else if (address < 0x4000U) {
-                    // ROMB1 - 1 bit, upper bit of 9-bit RAM bank
+                    // ROMB1 - 1 bit, upper bit of 9-bit RAM bank (note MBC5 can select bank 0 here)
                     byte &= 0x01U;
                     bankOffset &= 0x003fc000U;
                     if (byte != 0x00U) {
                         bankOffset |= 0x00400000U;
                     }
                     bankOffset &= (romProperties.bankSelectMask * 0x4000U);
-                    if (bankOffset == 0) {
-                        // Only exclusion with MBC5 is bank 0
-                        bankOffset = 0x00004000U;
-                    }
                     return;
                 } else if (address < 0x6000U) {
                     // RAMB - 4-bit RAM bank
