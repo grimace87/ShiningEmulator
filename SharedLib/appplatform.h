@@ -6,12 +6,19 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <fstream>
 
 class PlatformRenderer;
 class AudioStreamer;
 class Resource;
 class App;
 class Gbc;
+
+enum class FileOpenMode {
+    READ_ONLY_BINARY,
+    WRITE_NEW_FILE_BINARY,
+    RANDOM_READ_WRITE_BINARY
+};
 
 class AppPlatform {
 public:
@@ -31,9 +38,17 @@ public:
     virtual AudioStreamer* newAudioStreamer(Gbc* gbc) = 0;
     virtual Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) = 0;
     virtual Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) = 0;
-    virtual FILE* openFileInAppDir(std::string fileName, const char* mode) = 0;
+    virtual std::fstream openFileInAppDir(std::string fileName, FileOpenMode mode) = 0;
 	virtual void openDebugWindow(Gbc* gbc) = 0;
     virtual void withCurrentTime(std::function<void(struct tm*)> func) = 0;
     virtual void pollGamepad() = 0;
     virtual uint64_t getUptimeMillis() = 0;
+
+    static inline std::ios_base::openmode makeOpenFlags(FileOpenMode mode) {
+        switch (mode) {
+            case FileOpenMode::READ_ONLY_BINARY: return std::ios::in | std::ios::binary;
+            case FileOpenMode::WRITE_NEW_FILE_BINARY: return std::ios::out | std::ios::binary | std::ios::trunc;
+            case FileOpenMode::RANDOM_READ_WRITE_BINARY: return std::ios::in | std::ios::out | std::ios::binary;
+        }
+    }
 };

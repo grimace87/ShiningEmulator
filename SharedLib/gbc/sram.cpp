@@ -10,9 +10,6 @@ Sram::Sram() {
 
 Sram::~Sram() {
     delete[] data;
-    if (sramFile) {
-        fclose(sramFile);
-    }
 }
 
 void Sram::openSramFile(std::string& romFileName, AppPlatform& appPlatform) {
@@ -39,16 +36,16 @@ void Sram::openSramFile(std::string& romFileName, AppPlatform& appPlatform) {
         batteryFileWithoutPath = fileNameWithoutPath.substr(0, dotPosition) + ".gsv";
     }
 
-    sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, "rb+"); // In/out, must exist
-    if (sramFile == nullptr) {
-        sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, "wb"); // Create empty file for writing
-        if (sramFile == nullptr) {
+    sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, FileOpenMode::RANDOM_READ_WRITE_BINARY); // In/out, must exist
+    if (!sramFile.is_open()) {
+        std::fstream createdFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, FileOpenMode::WRITE_NEW_FILE_BINARY); // Create empty file for writing
+        if (!createdFile.is_open()) {
             return;
         }
 
         // Zero data buffer, write to new file
         std::fill(data, data + sizeBytes, 0);
-        fwrite(data, 1, sizeBytes, sramFile);
+        createdFile.write(reinterpret_cast<char*>(data), sizeof(uint8_t) * sizeBytes);
         if (hasTimer) {
             // Prepare new data to append to file
             appPlatform.withCurrentTime([&](struct tm* localTime) {
@@ -61,18 +58,18 @@ void Sram::openSramFile(std::string& romFileName, AppPlatform& appPlatform) {
             });
 
             // Append data at the end
-            fwrite(newTimerData, 1, 16, sramFile);
+            createdFile.write(reinterpret_cast<char*>(newTimerData), sizeof(char) * 16);
         }
 
         // Close file, re-open for in/out
-        fclose(sramFile);
-        sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, "rb+");
+        createdFile.close();
+        sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, FileOpenMode::RANDOM_READ_WRITE_BINARY);
     } else {
         // Get file size, read in saved data, verify timer data if needed
-        fseek(sramFile, 0L, SEEK_END);
-        size_t fileSize = ftell(sramFile);
-        rewind(sramFile);
-        fread(data, 1, sizeBytes, sramFile);
+        sramFile.seekg(std::ios_base::end);
+        size_t fileSize = sramFile.tellg();
+        sramFile.seekg(std::ios_base::beg);
+        sramFile.read(reinterpret_cast<char*>(data), sizeof(uint8_t) * sizeBytes);
         if (hasTimer) {
             // Check if the file already has the extra space at the end
             if (fileSize < sizeBytes + 16) {
@@ -87,18 +84,21 @@ void Sram::openSramFile(std::string& romFileName, AppPlatform& appPlatform) {
                 });
 
                 // Write the new data
-                fwrite(newTimerData, 1, 16, sramFile);
+                auto readPos = sramFile.tellg();
+                sramFile.seekp(readPos);
+                sramFile.write(reinterpret_cast<char*>(newTimerData), sizeof(char) * 16);
+                sramFile.seekp(std::ios_base::beg);
             }
         }
-        rewind(sramFile);
+        sramFile.seekg(std::ios_base::beg);
     }
 }
 
 void Sram::writeTimerData(unsigned int timerMode, unsigned char byte) {
     data[sizeBytes + timerMode] = byte;
     if (hasBattery && sramFile) {
-        fseek(sramFile, sizeBytes + timerMode, SEEK_SET);
-        fwrite(&byte, 1, 1, sramFile);
+        sramFile.seekp(sizeBytes + timerMode);
+        sramFile.write(reinterpret_cast<char*>(&byte), sizeof(char));
     }
 }
 
@@ -106,8 +106,8 @@ void Sram::write(unsigned int address, unsigned char byte) {
     unsigned int normalisedAddress = (address & 0x1fff) % sizeBytes;
     data[bankOffset + normalisedAddress] = byte;
     if (hasBattery && sramFile) {
-        fseek(sramFile, normalisedAddress, SEEK_SET);
-        fwrite(&byte, 1, 1, sramFile);
+        sramFile.seekp(normalisedAddress);
+        sramFile.write(reinterpret_cast<char*>(&byte), sizeof(char));
     }
 }
 

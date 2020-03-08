@@ -1,4 +1,3 @@
-#include <string>
 #include "gbcapp.h"
 
 #include "gbcappstate.h"
@@ -9,6 +8,9 @@
 #include "../audiostreamer.h"
 #include "../messagedefs.h"
 #include "gbcui.h"
+
+#include <string>
+#include <fstream>
 
 GbcApp::GbcApp(AppPlatform& platform) : App(platform) {
     state = GbcAppState::MAIN_MENU;
@@ -243,18 +245,16 @@ void GbcApp::doWork() {
                 }
             } else if (loadSaveStateButton.containsCoords(downXUnits, downYUnits)) {
                 if (!cursor.downHandled) {
-                    auto file = platform.openFileInAppDir("temp.gss", "rb");
-                    if (file) {
+                    std::fstream file = platform.openFileInAppDir("temp.gss", FileOpenMode::READ_ONLY_BINARY);
+                    if (file.is_open()) {
                         gbc.loadSaveState(file);
-                        fclose(file);
                     }
                 }
             } else if (saveSaveStateButton.containsCoords(downXUnits, downYUnits)) {
                 if (!cursor.downHandled) {
-                    auto file = platform.openFileInAppDir("temp.gss", "wb");
-                    if (file) {
+                    std::fstream file = platform.openFileInAppDir("temp.gss", FileOpenMode::WRITE_NEW_FILE_BINARY);
+                    if (file.is_open()) {
                         gbc.saveSaveState(file);
-                        fclose(file);
                     }
                 }
             }

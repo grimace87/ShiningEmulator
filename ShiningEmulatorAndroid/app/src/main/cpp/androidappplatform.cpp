@@ -99,14 +99,14 @@ Resource* AndroidAppPlatform::chooseFile(std::string fileTypeDescr, std::vector<
     return nullptr;
 }
 
-FILE* AndroidAppPlatform::openFileInAppDir(std::string fileName, const char* mode) {
+std::fstream AndroidAppPlatform::openFileInAppDir(std::string fileName, FileOpenMode mode) {
     // Attach this thread to the VM if not already (no-op if already attached)
     JavaVM* vm = activity->vm;
     JNIEnv* env;
     vm->AttachCurrentThread(&env, nullptr);
 
     // Create the Java object and invoke it
-    FILE* returnFile = nullptr;
+    std::fstream stream;
     if (javaActivityClass) {
         jmethodID methodId = env->GetStaticMethodID(javaActivityClass, "getAppDir", "()Ljava/lang/String;");
         jthrowable exception = env->ExceptionOccurred();
@@ -117,7 +117,8 @@ FILE* AndroidAppPlatform::openFileInAppDir(std::string fileName, const char* mod
             if (filePath) {
                 const char* nativeString = env->GetStringUTFChars(filePath, nullptr);
                 std::string completeFileName = std::string(nativeString) + "/" + fileName;
-                returnFile = fopen(completeFileName.c_str(), mode);
+                std::ios_base::openmode openMode = AppPlatform::makeOpenFlags(mode);
+                stream.open(completeFileName, openMode);
                 env->ReleaseStringUTFChars(filePath, nativeString);
             }
         }
@@ -125,7 +126,7 @@ FILE* AndroidAppPlatform::openFileInAppDir(std::string fileName, const char* mod
 
     // Detach this thread
     vm->DetachCurrentThread();
-    return returnFile;
+    return stream;
 }
 
 void AndroidAppPlatform::openDebugWindow(Gbc *gbc) {

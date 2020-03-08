@@ -9,6 +9,7 @@
 #include "debugwindowmodule.h"
 
 #include <cstdint>
+#include <iostream>
 
 class Gbc {
     friend class DebugUtils;
@@ -147,6 +148,6 @@ public:
     void reset();
     void speedUp();
     void slowDown();
-    void loadSaveState(FILE* file);
-    void saveSaveState(FILE* file);
+    void loadSaveState(std::istream& stream);
+    void saveSaveState(std::ostream& stream);
 };

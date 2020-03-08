@@ -121,19 +121,23 @@ Resource* WindowsAppPlatform::chooseFile(std::string fileTypeDescr, std::vector<
 }
 
 
-FILE* WindowsAppPlatform::openFileInAppDir(std::string fileName, const char* mode) {
+std::fstream WindowsAppPlatform::openFileInAppDir(std::string fileName, FileOpenMode mode) {
+
+    // Create a stream object, open a file if possible, will be returned regardless
+    std::fstream stream;
+
     // Get path and filename of running app
     char path[512];
     int bytesCopied = GetModuleFileNameA(NULL, (LPSTR)&path, 512);
     if (bytesCopied == 0) {
-        return nullptr;
+        return stream;
     }
     std::string pathOfRunningApp = path;
 
     // Get directory of the running app (including the final slash at the end)
     size_t lastSlash = pathOfRunningApp.find_last_of("/\\");
     if (lastSlash == std::string::npos) {
-        return nullptr;
+        return stream;
     }
     std::string runningAppDirectory = pathOfRunningApp.substr(0, lastSlash + 1);
 
@@ -148,17 +152,9 @@ FILE* WindowsAppPlatform::openFileInAppDir(std::string fileName, const char* mod
 
     // Form the full path of a new file in this same directory
     std::string fullPathOfNewFile = runningAppDirectory + useFileName;
-
-    FILE* file;
-    errno_t result = fopen_s(&file, fullPathOfNewFile.c_str(), mode);
-    if (result == 0) {
-        return file;
-    } else {
-        if (result == 13) {
-            MessageBoxW(NULL, L"Could not access app location to save game data.", L"Permission denied", MB_OK);
-        }
-        return nullptr;
-    }
+    std::ios_base::openmode openMode = AppPlatform::makeOpenFlags(mode);
+    stream.open(fullPathOfNewFile, openMode);
+    return stream;
 }
 
 void WindowsAppPlatform::openDebugWindow(Gbc* gbc) {

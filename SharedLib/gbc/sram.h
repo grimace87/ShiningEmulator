@@ -2,12 +2,13 @@
 
 #include <cstdio>
 #include <string>
+#include <fstream>
 
 class AppPlatform;
 
 class Sram {
 public:
-    FILE* sramFile = nullptr;
+    std::fstream sramFile;
     uint8_t* data;
     bool hasBattery = false;
     bool hasTimer = false;
