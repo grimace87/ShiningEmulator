@@ -4,15 +4,11 @@
 #include "gbcappstate.h"
 #include "gbcrenderer.h"
 #include "../uidefs.h"
-#include "../gbc/gbc.h"
 #include "../resource.h"
 #include "../appplatform.h"
 #include "../audiostreamer.h"
 #include "../messagedefs.h"
 #include "gbcui.h"
-
-GbcAppState persistentState;
-Gbc gbc;
 
 GbcApp::GbcApp(AppPlatform& platform) : App(platform) {
     state = GbcAppState::MAIN_MENU;

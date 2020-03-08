@@ -3,11 +3,11 @@
 #include "../app.h"
 #include "gbcappstate.h"
 #include "../gbc/inputset.h"
-
-class Gbc;
+#include "../gbc/gbc.h"
 
 class GbcApp : public App {
 private:
+	Gbc gbc;
     InputSet gbcKeys;
     GbcAppState state;
     void updateState(uint64_t timeDiffMillis);
