@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../app.h"
+#include "gbcappstate.h"
 #include "../gbc/inputset.h"
 
 class Gbc;
@@ -8,6 +9,7 @@ class Gbc;
 class GbcApp : public App {
 private:
     InputSet gbcKeys;
+    GbcAppState state;
     void updateState(uint64_t timeDiffMillis);
 protected:
     void processMsg(const Message& msg) override;

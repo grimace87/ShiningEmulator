@@ -18,7 +18,7 @@
 
 GbcRenderer::GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* gbc) :
         Renderer(appPlatform, platformRenderer), gbc(gbc), windowTextureHandle(0) {
-    this->frameState = new GbcAppState();
+    this->frameState = 0;
     this->showFullUi = appPlatform->usesTouch;
 }
 
@@ -155,8 +155,7 @@ void GbcRenderer::doWork() {
     cond.wait(lock);
 
     // Make sure thread is still in a running state
-    if (!running)
-    {
+    if (!running) {
         return;
     }
 
@@ -166,11 +165,9 @@ void GbcRenderer::doWork() {
     bool framePrepared = false;
     unsigned int firstConfig = 0;
     unsigned int configCount = 0;
-    if (frameQueued)
-    {
-        // Cast app state, check mode, prepare frame configs and indicate which to render
-        auto state = (GbcAppState*) frameState;
-        if (state->appMode == AppMode::MAIN_MENU) {
+    if (frameQueued) {
+        // Check mode, prepare frame configs and indicate which to render
+        if (frameState == (uint32_t)GbcAppState::MAIN_MENU) {
             // Construct transformation matrices
             glm::mat4 mainMvpMatrix(1.0f);
 
@@ -189,7 +186,7 @@ void GbcRenderer::doWork() {
             firstConfig = 0;
             configCount = 2;
             framePrepared = true;
-        } else if (state->appMode == AppMode::PLAYING) {
+        } else if (frameState == (uint32_t)GbcAppState::PLAYING) {
             uint32_t* upscaledFrameBuffer = gbc->frameManager.getRenderableFrameBuffer();
             if (upscaledFrameBuffer != nullptr) {
                 // Construct transformation matrix

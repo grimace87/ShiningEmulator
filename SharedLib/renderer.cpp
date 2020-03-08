@@ -11,17 +11,17 @@ Renderer::Renderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer)
     requestedWidth = 0;
     requestedHeight = 0;
     frameTimeDiffMillis = 0;
-    frameState = nullptr;
+    frameState = 0;
 }
 
 Renderer::~Renderer() = default;
 
-bool Renderer::signalFrameReady(uint64_t timeDiffMillis, AppState* lockedAppState) {
+bool Renderer::signalFrameReady(uint64_t timeDiffMillis, uint32_t appState) {
     bool frameWasQueued = false;
     if (!frameQueued) {
         threadMutex.lock();
         frameTimeDiffMillis = timeDiffMillis;
-        frameState = lockedAppState;
+        frameState = appState;
         frameQueued = true;
         frameWasQueued = true;
         threadMutex.unlock();

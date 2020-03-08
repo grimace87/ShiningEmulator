@@ -15,6 +15,7 @@ GbcAppState persistentState;
 Gbc gbc;
 
 GbcApp::GbcApp(AppPlatform& platform) : App(platform) {
+    state = GbcAppState::MAIN_MENU;
     loadPersistentState();
 }
 
@@ -27,11 +28,11 @@ Gbc* GbcApp::getGbc() {
 }
 
 void GbcApp::persistState() {
-    persistentState = *GbcAppState::getCurrentInstance();
+    // TODO
 }
 
 void GbcApp::loadPersistentState() {
-    GbcAppState::setCurrentInstance(persistentState);
+    // TODO
 }
 
 void GbcApp::processMsg(const Message& msg) {
@@ -50,7 +51,7 @@ void GbcApp::processMsg(const Message& msg) {
             if (file) {
                 gbc.loadRom(file->fileName, file->rawStream, file->rawDataLength, platform);
                 if (gbc.romProperties.valid) {
-                    GbcAppState::getCurrentInstance()->appMode = AppMode::PLAYING;
+                    state = GbcAppState::PLAYING;
                     gbc.reset();
                 }
                 delete file;
@@ -68,7 +69,7 @@ void GbcApp::processMsg(const Message& msg) {
                     }
                     gbc.loadRom(nameForSramFile, resource->rawStream, resource->rawDataLength, platform);
                     if (gbc.romProperties.valid) {
-                        GbcAppState::getCurrentInstance()->appMode = AppMode::PLAYING;
+                        state = GbcAppState::PLAYING;
                         gbc.reset();
                     }
                 }
@@ -184,8 +185,7 @@ void GbcApp::doWork() {
         float downYUnits = -2.0f * cursor.downYPixels / (float)windowHeight + 1.0f;
         float currentXUnits = 2.0f * cursor.xPixels / (float)windowWidth - 1.0f;
         float currentYUnits = -2.0f * cursor.yPixels / (float)windowHeight + 1.0f;
-        auto mode = GbcAppState::getCurrentInstance()->appMode;
-        if (mode == AppMode::MAIN_MENU) {
+        if (state == GbcAppState::MAIN_MENU) {
             if (!cursor.downHandled) {
                 auto renderer = (GbcRenderer*)((GbcAppState*)this->renderer);
                 for (auto& button : renderer->uiButtons) {
@@ -198,7 +198,7 @@ void GbcApp::doWork() {
                 }
             }
         }
-        else if (mode == AppMode::PLAYING) {
+        else if (state == GbcAppState::PLAYING) {
             auto renderer = (GbcRenderer*)this->renderer;
             auto& dpadButton = renderer->gameplayButtons[BTN_INDEX_DPAD];
             auto& bButton = renderer->gameplayButtons[BTN_INDEX_B];
@@ -273,18 +273,18 @@ void GbcApp::doWork() {
 
     // Signal render frame
     if (renderer) {
-        if (renderer->signalFrameReady(frameTimeAccumulated, GbcAppState::getCurrentInstance())) {
+        if (renderer->signalFrameReady(frameTimeAccumulated, (uint32_t)state)) {
             frameTimeAccumulated = 0;
         }
     }
 }
 
 void GbcApp::updateState(uint64_t timeDiffMillis) {
-    if (GbcAppState::getCurrentInstance()->appMode == AppMode::PLAYING) {
+    if (state == GbcAppState::PLAYING) {
         if (gbc.isRunning) {
             gbc.doWork(timeDiffMillis, this->gbcKeys);
         } else {
-            GbcAppState::getCurrentInstance()->appMode = AppMode::MAIN_MENU;
+            state = GbcAppState::MAIN_MENU;
         }
     }
 }

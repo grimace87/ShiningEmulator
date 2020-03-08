@@ -16,7 +16,7 @@ public:
     void stopThread() override;
     Renderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer);
     virtual ~Renderer();
-    bool signalFrameReady(uint64_t timeDiffMillis, AppState* lockedAppState);
+    bool signalFrameReady(uint64_t timeDiffMillis, uint32_t lockedAppState);
     void requestWindowResize(int width, int height);
     void queryCanvasSize(int* outWidth, int* outHeight);
 protected:
@@ -25,6 +25,6 @@ protected:
     PlatformRenderer* platformRenderer;
     std::vector<FrameConfig> frameConfigs;
     bool frameQueued;
-    AppState* frameState;
+    uint32_t frameState;
     uint64_t frameTimeDiffMillis;
 };

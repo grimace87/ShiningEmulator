@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 add_library(SharedLib ${BUILD_SHARED_LIBS}
         app.cpp
         appplatform.cpp
-        appstate.cpp
         audiostreamer.cpp
         font.cpp
         ../lib/lodepng/lodepng.cpp
@@ -18,7 +17,6 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         uielements.cpp
         gbcapp/gbcapp.cpp
         gbc/inputset.cpp
-        gbcapp/gbcappstate.cpp
         gbcapp/gbcrenderer.cpp
         gbc/gbc.cpp
         gbc/debugwindowmodule.cpp
