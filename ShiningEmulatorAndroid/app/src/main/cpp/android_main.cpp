@@ -61,6 +61,7 @@ App* app = nullptr;
 AInputQueue* inputQueue = nullptr;
 Resource* pendingResource = nullptr;
 jclass globalActivityClassRef = nullptr;
+const std::string CROSS_WINDOW_PERSISTENCE_FILE = "window_state.gss";
 
 // Entry point
 void ANativeActivity_onCreate(ANativeActivity* activity, void* savedState, size_t savedStateSize) {
@@ -108,6 +109,12 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     app->startThread();
     activity->instance = app;
 
+    // Attempt to restore state
+    std::ifstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::in | std::ios::binary);
+    if (stream.is_open()) {
+        app->loadPersistentState(stream);
+    }
+
     if (App::pendingFileToOpen) {
         app->postMessage({ Action::MSG_FILE_RETRIEVED, 0 });
     }
@@ -123,7 +130,11 @@ void onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
             app = nullptr;
         }
 
-        activityApp->persistState();
+        // Persist current state so it may be restored next time a window is created
+        std::ofstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::out | std::ios::binary);
+        activityApp->persistState(stream);
+
+        // Clean up the app thread
         activityApp->stopThread();
         delete activityApp;
         activity->instance = nullptr;
@@ -184,10 +195,9 @@ void onInputQueueDestroyed(ANativeActivity* activity, AInputQueue* queue) {
 
 // Instance state
 void* onSaveInstanceState(ANativeActivity* activity, size_t* outLen) {
-    App* app = (App*)activity->instance;
-    if (app) {
-        app->persistState();
-    }
+    // TODO - Do we need this?
+    // App* app = (App*)activity->instance;
+    // if (app) { app->persistState(); }
     *outLen = 0;
     return nullptr;
 }

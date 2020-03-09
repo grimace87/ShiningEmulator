@@ -79,6 +79,8 @@ Gbc::Gbc() {
     sgb.palettes = new uint32_t[4 * 4];
     sgb.sysPalettes = new uint32_t[512 * 4]; // 512 palettes, 4 colours per palette, RGB
     sgb.chrPalettes = new uint32_t[18 * 20];
+
+    currentOpenedFile = "";
 }
 
 Gbc::~Gbc() {
@@ -386,7 +388,13 @@ bool Gbc::loadRom(std::string fileName, const uint8_t* data, int dataLength, App
     // Remember this file to re-open next time
     //saveLastFileName(FileName, 512);
 
+    currentOpenedFile = fileName;
+
     return true;
+}
+
+std::string Gbc::getLoadedFileName() {
+    return currentOpenedFile;
 }
 
 void Gbc::reset() {

@@ -91,6 +91,9 @@ class Gbc {
     void readLineSgb(uint32_t* frameBuffer);
     void readLineCgb(uint32_t* frameBuffer);
 
+    // Name of current loaded ROM file, in format that can be opened directly using AppPlatform
+    std::string currentOpenedFile;
+
 public:
     void doWork(uint64_t timeDiffMillis, InputSet& inputs);
     FrameManager frameManager;
@@ -145,6 +148,7 @@ public:
 
     // Other public functions
     bool loadRom(std::string fileName, const uint8_t* data, int dataLength, AppPlatform& appPlatform);
+    std::string getLoadedFileName();
     void reset();
     void speedUp();
     void slowDown();

@@ -4,11 +4,9 @@
 #include "renderer.h"
 #include "audiostreamer.h"
 
-AppState* App::savedState = nullptr;
 char* App::pendingFileToOpen = nullptr;
 
 App::App(AppPlatform& platform) : menu(Menu::buildMain()), platform(platform) {
-    savedState = nullptr;
     renderer = nullptr;
     audioStreamer = nullptr;
     platform.releaseAllInputs();

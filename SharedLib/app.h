@@ -3,7 +3,8 @@
 #include "thread.h"
 #include "menu.h"
 
-class AppState;
+#include <iostream>
+
 class AppPlatform;
 class Renderer;
 class AudioStreamer;
@@ -15,12 +16,11 @@ public:
     virtual ~App();
     Menu menu;
     AppPlatform& platform;
-    static AppState* savedState;
     static char* pendingFileToOpen;
     bool initObject() final;
     void killObject() final;
-    virtual void persistState() = 0;
-    virtual void loadPersistentState() = 0;
+    virtual void persistState(std::ostream& stream) = 0;
+    virtual void loadPersistentState(std::istream& stream) = 0;
     void doWork() override = 0;
     void requestWindowResize(int width, int height);
     // Cursor modifiers merely call the equivalents on the AppPlatform object

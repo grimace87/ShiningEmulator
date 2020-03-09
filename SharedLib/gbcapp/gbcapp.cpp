@@ -10,11 +10,10 @@
 #include "gbcui.h"
 
 #include <string>
-#include <fstream>
 
-GbcApp::GbcApp(AppPlatform& platform) : App(platform) {
+GbcApp::GbcApp(AppPlatform& platform) : App(platform), gbcKeys() {
     state = GbcAppState::MAIN_MENU;
-    loadPersistentState();
+    gbcKeys.clear();
 }
 
 GbcApp::~GbcApp() {
@@ -25,12 +24,41 @@ Gbc* GbcApp::getGbc() {
 	return &gbc;
 }
 
-void GbcApp::persistState() {
-    // TODO
+void GbcApp::persistState(std::ostream& stream) {
+    stream << (int)state;
+    if (gbc.isRunning || gbc.isPaused) {
+        stream << true;
+        stream << gbc.getLoadedFileName();
+        gbc.saveSaveState(stream);
+    } else {
+        stream << false;
+    }
 }
 
-void GbcApp::loadPersistentState() {
-    // TODO
+void GbcApp::loadPersistentState(std::istream& stream) {
+    bool gbcWasSaved;
+    stream >> (int&)state;
+    stream >> gbcWasSaved;
+    if (gbcWasSaved) {
+        std::string fileName;
+        stream >> fileName;
+        Resource* file = platform.getResource(fileName.c_str(), false, false);
+        if (file) {
+            openRomFile(file);
+            gbc.loadSaveState(stream);
+        }
+    }
+}
+
+void GbcApp::openRomFile(Resource* file) {
+    if (file) {
+        gbc.loadRom(file->fileName, file->rawStream, file->rawDataLength, platform);
+        if (gbc.romProperties.valid) {
+            state = GbcAppState::PLAYING;
+            gbc.reset();
+        }
+        delete file;
+    }
 }
 
 void GbcApp::processMsg(const Message& msg) {
@@ -47,12 +75,7 @@ void GbcApp::processMsg(const Message& msg) {
         case Action::MSG_OPEN_FILE: {
             Resource* file = platform.chooseFile("ROM file", { ".gb", ".gbc" });
             if (file) {
-                gbc.loadRom(file->fileName, file->rawStream, file->rawDataLength, platform);
-                if (gbc.romProperties.valid) {
-                    state = GbcAppState::PLAYING;
-                    gbc.reset();
-                }
-                delete file;
+                openRomFile(file);
             }
         }
             break;
