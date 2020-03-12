@@ -57,9 +57,7 @@ int processInputEvents(int fd, int events, void* data);
 #endif
 
 // Global objects
-App* app = nullptr;
 AInputQueue* inputQueue = nullptr;
-Resource* pendingResource = nullptr;
 jclass globalActivityClassRef = nullptr;
 const std::string CROSS_WINDOW_PERSISTENCE_FILE = "window_state.gss";
 
@@ -91,32 +89,31 @@ void setCallbacks(ANativeActivity* activity) {
 void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     LOGV("NativeWindowCreated: %p -- %p\n", activity, window);
 
-    // Close existing app
-    if (app != nullptr) {
-        // TODO - Consider re-introducing these things?
-//        app->persistState();
-//        app->stopThread();
-//        delete app;
-
-        app->killObject();
-        app = nullptr;
+    // Close existing app if there is one
+    if (GbcApp* prevInstance = (GbcApp*)activity->instance) {
+        // Fine to destroy the object - its state should have been saved already
+        prevInstance->stopThread();
+        delete prevInstance;
+        activity->instance = nullptr;
     }
 
     // Create new app instance
     auto platform = new AndroidAppPlatform(activity, window);
     platform->setJavaActivityClass(globalActivityClassRef);
-    app = new GbcApp(*platform);
-    app->startThread();
-    activity->instance = app;
+    GbcApp* newInstance = new GbcApp(*platform);
+    newInstance->startThread();
+    activity->instance = newInstance;
 
     // Attempt to restore state
     std::ifstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::in | std::ios::binary);
     if (stream.is_open()) {
-        app->loadPersistentState(stream);
+        newInstance->suspendThread();
+        newInstance->loadPersistentState(stream);
+        newInstance->resumeThread();
     }
 
     if (App::pendingFileToOpen) {
-        app->postMessage({ Action::MSG_FILE_RETRIEVED, 0 });
+        newInstance->postMessage({ Action::MSG_FILE_RETRIEVED, 0 });
     }
 }
 
@@ -125,20 +122,18 @@ void onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
 
     // Close existing renderer
     App* activityApp = (App*)activity->instance;
-    if (activityApp == (App*)5) {
-        if (app == activityApp) {
-            app = nullptr;
-        }
-
-        // Persist current state so it may be restored next time a window is created
-        std::ofstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::out | std::ios::binary);
-        activityApp->persistState(stream);
-
-        // Clean up the app thread
-        activityApp->stopThread();
-        delete activityApp;
-        activity->instance = nullptr;
+    if (activityApp == nullptr) {
+        return;
     }
+
+    // Persist current state so it may be restored next time a window is created
+    std::ofstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::out | std::ios::binary);
+    activityApp->persistState(stream);
+
+    // Clean up the app thread
+    activityApp->stopThread();
+    delete activityApp;
+    activity->instance = nullptr;
 }
 
 // Basic activity lifecycle
