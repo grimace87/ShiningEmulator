@@ -25,20 +25,22 @@ Gbc* GbcApp::getGbc() {
 }
 
 void GbcApp::persistState(std::ostream& stream) {
-    stream << (int)state;
+    stream.write(reinterpret_cast<char*>(&state), sizeof(GbcAppState));
     if (gbc.isRunning || gbc.isPaused) {
-        stream << true;
+        bool True = true;
+        stream.write(reinterpret_cast<char*>(&True), sizeof(bool));
         stream << gbc.getLoadedFileName();
         gbc.saveSaveState(stream);
     } else {
-        stream << false;
+        bool False = false;
+        stream.write(reinterpret_cast<char*>(&False), sizeof(bool));
     }
 }
 
 void GbcApp::loadPersistentState(std::istream& stream) {
     bool gbcWasSaved;
-    stream >> (int&)state;
-    stream >> gbcWasSaved;
+    stream.read(reinterpret_cast<char*>(&state), sizeof(GbcAppState));
+    stream.read(reinterpret_cast<char*>(&gbcWasSaved), sizeof(bool));
     if (gbcWasSaved) {
         std::string fileName;
         stream >> fileName;
