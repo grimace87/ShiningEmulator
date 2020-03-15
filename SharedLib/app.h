@@ -8,7 +8,7 @@
 class AppPlatform;
 class Renderer;
 class AudioStreamer;
-class Message;
+struct Message;
 
 class App : public Thread {
 public:

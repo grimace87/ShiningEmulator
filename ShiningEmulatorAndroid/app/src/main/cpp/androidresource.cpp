@@ -23,8 +23,10 @@ AndroidResource::AndroidResource(ANativeActivity* activity, const char* fileName
 
 AndroidResource::~AndroidResource() {
     if (bufferIsCopy) {
-        delete[] rawStream;
-    } else {
+        if (rawStream) {
+            delete[] rawStream;
+        }
+    } else if (asset) {
         AAsset_close(asset);
     }
 }
@@ -56,6 +58,7 @@ void AndroidResource::openFromAsset(ANativeActivity* activity, const char* fileN
         } while (bytesRead > 0);
         assert(totalBytesRead == rawDataLength);
         AAsset_close(asset);
+        asset = nullptr;
     }
 }
 

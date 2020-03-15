@@ -6219,15 +6219,6 @@ void Gbc::slowDown() {
 #define READ_STREAM(var, type) stream.read(reinterpret_cast<char*>(&var), sizeof(type))
 #define READ_STREAM_A(var, type, count) stream.read(reinterpret_cast<char*>(&var), sizeof(type) * count)
 void Gbc::loadSaveState(std::istream& stream) {
-    // Preserve the pointers to heap memory that are contained in SgbModule and Sram
-    uint32_t* sgbMonoData = this->sgb.monoData;
-    uint8_t* sgbMappedVramForTrnOp = this->sgb.mappedVramForTrnOp;
-    uint32_t* sgbPalettes = this->sgb.palettes;
-    uint32_t* sgbSysPalettes = this->sgb.sysPalettes;
-    uint32_t* sgbChrPalettes = this->sgb.chrPalettes;
-    std::fstream sramFile = std::move(this->sram.sramFile);
-    uint8_t* sramData = this->sram.data;
-
     READ_STREAM(cpuPc, uint32_t);
     READ_STREAM(cpuSp, uint32_t);
     READ_STREAM(cpuA, uint8_t);
@@ -6271,12 +6262,19 @@ void Gbc::loadSaveState(std::istream& stream) {
     READ_STREAM_A(ioPorts, uint8_t, 256);
     READ_STREAM_A(oam, uint8_t, 160);
     READ_STREAM_A(tileSet, uint32_t, 2 * 384 * 8 * 8);
-    READ_STREAM(sgb, SgbModule);
-    this->sgb.monoData = sgbMonoData;
-    this->sgb.mappedVramForTrnOp = sgbMappedVramForTrnOp;
-    this->sgb.palettes = sgbPalettes;
-    this->sgb.sysPalettes = sgbSysPalettes;
-    this->sgb.chrPalettes = sgbChrPalettes;
+    READ_STREAM(sgb.readingCommand, bool);
+    READ_STREAM_A(sgb.commandBytes, uint32_t, 7 * 16);
+    READ_STREAM_A(sgb.commandBits, uint8_t, 8);
+    READ_STREAM(sgb.command, uint32_t);
+    READ_STREAM(sgb.readCommandBits, int32_t);
+    READ_STREAM(sgb.readCommandBytes, int32_t);
+    READ_STREAM(sgb.freezeScreen, bool);
+    READ_STREAM(sgb.freezeMode, uint32_t);
+    READ_STREAM(sgb.multEnabled, bool);
+    READ_STREAM(sgb.noPlayers, uint32_t);
+    READ_STREAM(sgb.noPacketsSent, uint32_t);
+    READ_STREAM(sgb.noPacketsToSend, uint32_t);
+    READ_STREAM(sgb.readJoypadID, uint32_t);
     READ_STREAM_A(sgb.monoData, uint32_t, 160 * 152);
     READ_STREAM_A(sgb.mappedVramForTrnOp, uint8_t, 4096);
     READ_STREAM_A(sgb.palettes, uint32_t, 4 * 4);
@@ -6295,12 +6293,19 @@ void Gbc::loadSaveState(std::istream& stream) {
     READ_STREAM(cgbObjPalIncr, uint32_t);
     READ_STREAM_A(cgbObjPalette, uint32_t, 32);
     READ_STREAM(lastLYCompare, uint32_t);
-    READ_STREAM(sram, Sram);
+    READ_STREAM(sram.hasBattery, bool);
+    READ_STREAM(sram.hasTimer, bool);
+    READ_STREAM_A(sram.timerData, unsigned char, 5);
+    READ_STREAM(sram.timerMode, uint32_t);
+    READ_STREAM(sram.timerLatch, uint32_t);
+    READ_STREAM(sram.bankOffset, uint32_t);
+    READ_STREAM(sram.sizeEnum, uint8_t);
+    READ_STREAM(sram.sizeBytes, uint32_t);
+    READ_STREAM(sram.bankSelectMask, unsigned char);
+    READ_STREAM(sram.enableFlag, bool);
+    READ_STREAM_A(sram.data, uint8_t, sram.sizeBytes);
     READ_STREAM(keys, InputSet);
     READ_STREAM(keyStateChanged, bool);
-
-    this->sram.sramFile = std::move(sramFile);
-    this->sram.data = sramData;
 }
 
 #define WRITE_STREAM(var, type) stream.write(reinterpret_cast<char*>(&var), sizeof(type))
@@ -6349,7 +6354,19 @@ void Gbc::saveSaveState(std::ostream& stream) {
     WRITE_STREAM_A(ioPorts, uint8_t, 256);
     WRITE_STREAM_A(oam, uint8_t, 160);
     WRITE_STREAM_A(tileSet, uint32_t, 2 * 384 * 8 * 8);
-    WRITE_STREAM(sgb, SgbModule);
+    WRITE_STREAM(sgb.readingCommand, bool);
+    WRITE_STREAM_A(sgb.commandBytes, uint32_t, 7 * 16);
+    WRITE_STREAM_A(sgb.commandBits, uint8_t, 8);
+    WRITE_STREAM(sgb.command, uint32_t);
+    WRITE_STREAM(sgb.readCommandBits, int32_t);
+    WRITE_STREAM(sgb.readCommandBytes, int32_t);
+    WRITE_STREAM(sgb.freezeScreen, bool);
+    WRITE_STREAM(sgb.freezeMode, uint32_t);
+    WRITE_STREAM(sgb.multEnabled, bool);
+    WRITE_STREAM(sgb.noPlayers, uint32_t);
+    WRITE_STREAM(sgb.noPacketsSent, uint32_t);
+    WRITE_STREAM(sgb.noPacketsToSend, uint32_t);
+    WRITE_STREAM(sgb.readJoypadID, uint32_t);
     WRITE_STREAM_A(sgb.monoData, uint32_t, 160 * 152);
     WRITE_STREAM_A(sgb.mappedVramForTrnOp, uint8_t, 4096);
     WRITE_STREAM_A(sgb.palettes, uint32_t, 4 * 4);
@@ -6368,7 +6385,17 @@ void Gbc::saveSaveState(std::ostream& stream) {
     WRITE_STREAM(cgbObjPalIncr, uint32_t);
     WRITE_STREAM_A(cgbObjPalette, uint32_t, 32);
     WRITE_STREAM(lastLYCompare, uint32_t);
-    WRITE_STREAM(sram, Sram);
+    WRITE_STREAM(sram.hasBattery, bool);
+    WRITE_STREAM(sram.hasTimer, bool);
+    WRITE_STREAM_A(sram.timerData, unsigned char, 5);
+    WRITE_STREAM(sram.timerMode, uint32_t);
+    WRITE_STREAM(sram.timerLatch, uint32_t);
+    WRITE_STREAM(sram.bankOffset, uint32_t);
+    WRITE_STREAM(sram.sizeEnum, uint8_t);
+    WRITE_STREAM(sram.sizeBytes, uint32_t);
+    WRITE_STREAM(sram.bankSelectMask, unsigned char);
+    WRITE_STREAM(sram.enableFlag, bool);
+    WRITE_STREAM_A(sram.data, uint8_t, sram.sizeBytes);
     WRITE_STREAM(keys, InputSet);
     WRITE_STREAM(keyStateChanged, bool);
 }
