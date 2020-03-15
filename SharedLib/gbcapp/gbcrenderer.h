@@ -31,6 +31,7 @@ class GbcRenderer : public Renderer {
 protected:
     bool initObject() override;
     void doWork() override;
+    void preCleanup() final;
 public:
     GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* ggbc);
     ~GbcRenderer() override;

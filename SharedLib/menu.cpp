@@ -15,7 +15,7 @@ Menu Menu::buildMain() {
                         Menu {L"Open ROM", Action::MSG_OPEN_FILE},
                         Menu {L"Show debug window", Action::MSG_OPEN_DEBUGGER}
                     }},
-                    Menu {L"Exit", Action::MSG_EXIT}
+                    Menu {L"Exit", Action::MSG_REQUEST_EXIT}
             }
     };
 }

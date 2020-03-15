@@ -13,7 +13,6 @@ public:
     bool initObject() override = 0;
     void doWork() override = 0;
     void killObject() override;
-    void stopThread() override;
     Renderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer);
     virtual ~Renderer();
     bool signalFrameReady(uint64_t timeDiffMillis, uint32_t lockedAppState);
@@ -21,6 +20,7 @@ public:
     void queryCanvasSize(int* outWidth, int* outHeight);
 protected:
     void processMsg(const Message& msg) override;
+    std::condition_variable frameConditionVariable;
     AppPlatform* appPlatform;
     PlatformRenderer* platformRenderer;
     std::vector<FrameConfig> frameConfigs;

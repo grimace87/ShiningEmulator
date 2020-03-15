@@ -125,7 +125,10 @@ std::fstream AndroidAppPlatform::openFileInAppDir(std::string fileName, FileOpen
     }
 
     // Detach this thread
-    vm->DetachCurrentThread();
+
+    // TODO - Re-instate this
+    //vm->DetachCurrentThread();
+
     return stream;
 }
 

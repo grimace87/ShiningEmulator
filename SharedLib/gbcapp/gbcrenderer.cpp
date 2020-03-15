@@ -148,14 +148,19 @@ bool GbcRenderer::initObject() {
     return contextCreated;
 }
 
+void GbcRenderer::preCleanup() {
+    isValid = false;
+    frameConditionVariable.notify_one();
+}
+
 void GbcRenderer::doWork() {
     // Wait for frame signal (this should be invoked when stopping the thread also since frames will
     // no longer be generated)
     std::unique_lock<std::mutex> lock(threadMutex);
-    cond.wait(lock);
+    frameConditionVariable.wait(lock);
 
     // Make sure thread is still in a running state
-    if (!running) {
+    if (!isValid) {
         return;
     }
 

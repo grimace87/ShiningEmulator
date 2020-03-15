@@ -29,7 +29,10 @@ void GbcApp::persistState(std::ostream& stream) {
     if (gbc.isRunning || gbc.isPaused) {
         bool True = true;
         stream.write(reinterpret_cast<char*>(&True), sizeof(bool));
-        stream << gbc.getLoadedFileName();
+        std::string fileName = gbc.getLoadedFileName();
+        size_t stringLength = fileName.length();
+        stream.write(reinterpret_cast<char*>(&stringLength), sizeof(size_t));
+        stream.write(fileName.c_str(), stringLength);
         gbc.saveSaveState(stream);
     } else {
         bool False = false;
@@ -41,14 +44,29 @@ void GbcApp::loadPersistentState(std::istream& stream) {
     bool gbcWasSaved;
     stream.read(reinterpret_cast<char*>(&state), sizeof(GbcAppState));
     stream.read(reinterpret_cast<char*>(&gbcWasSaved), sizeof(bool));
-    if (gbcWasSaved) {
-        std::string fileName;
-        stream >> fileName;
-        Resource* file = platform.getResource(fileName.c_str(), false, false);
+    if (gbcWasSaved && (state == GbcAppState::PLAYING)) {
+        size_t stringLength;
+        stream.read(reinterpret_cast<char*>(&stringLength), sizeof(size_t));
+        if (stringLength == 0) {
+            state = GbcAppState::MAIN_MENU;
+            return;
+        }
+        char* fileNameChars = new char[stringLength + 1];
+        stream.read(fileNameChars, stringLength * sizeof(char));
+        fileNameChars[stringLength] = '\0';
+
+        // TODO - Open a file properly!!!
+        Resource* file = platform.getResource(fileNameChars, false, false);
         if (file) {
             openRomFile(file);
             gbc.loadSaveState(stream);
+            delete file;
+        } else {
+            state = GbcAppState::MAIN_MENU;
         }
+        delete[] fileNameChars;
+    } else {
+        state = GbcAppState::MAIN_MENU;
     }
 }
 
@@ -59,21 +77,12 @@ void GbcApp::openRomFile(Resource* file) {
             state = GbcAppState::PLAYING;
             gbc.reset();
         }
-        delete file;
     }
 }
 
 void GbcApp::processMsg(const Message& msg) {
+    Thread::processMsg(msg);
     switch (msg.msg) {
-        case Action::MSG_EXIT:
-            running = false;
-            break;
-        case Action::MSG_PAUSE:
-            suspendThread();
-            break;
-        case Action::MSG_RESUME:
-            resumeThread();
-            break;
         case Action::MSG_OPEN_FILE: {
             Resource* file = platform.chooseFile("ROM file", { ".gb", ".gbc" });
             if (file) {

@@ -91,7 +91,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     // Run standard Windows message loop
     MSG msg;
-    while (GetMessage(&msg, nullptr, 0, 0) && runningApp->running) {
+    while (GetMessage(&msg, nullptr, 0, 0) && runningApp->isRunning()) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
@@ -141,7 +141,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         runningApp->postMessage({ Action::MSG_OPEN_FILE, NULL });
                     }
                     break;
-                case (int)Action::MSG_EXIT:
+                case (int)Action::MSG_REQUEST_EXIT:
                     PostQuitMessage(0);
                     break;
                 default:

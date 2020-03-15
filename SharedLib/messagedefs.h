@@ -2,9 +2,8 @@
 
 enum class Action {
     MSG_UNUSED,
-    MSG_EXIT,
-    MSG_PAUSE,
-    MSG_RESUME,
+    MSG_REQUEST_EXIT,
+    MSG_STATE_TRANSITION,
     MSG_OPEN_FILE,
     MSG_FILE_RETRIEVED,
     MSG_UPDATE_SIZE,

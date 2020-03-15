@@ -105,7 +105,7 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     activity->instance = newInstance;
 
     // Attempt to restore state
-    std::ifstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::in | std::ios::binary);
+    std::fstream stream = newInstance->platform.openFileInAppDir(CROSS_WINDOW_PERSISTENCE_FILE, FileOpenMode::READ_ONLY_BINARY);
     if (stream.is_open()) {
         newInstance->suspendThread();
         newInstance->loadPersistentState(stream);
@@ -127,12 +127,17 @@ void onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
     }
 
     // Persist current state so it may be restored next time a window is created
-    std::ofstream stream(CROSS_WINDOW_PERSISTENCE_FILE, std::ios::out | std::ios::binary);
-    activityApp->persistState(stream);
+    std::fstream stream = activityApp->platform.openFileInAppDir(CROSS_WINDOW_PERSISTENCE_FILE, FileOpenMode::WRITE_NEW_FILE_BINARY);
+    if (stream.is_open()) {
+        activityApp->persistState(stream);
+    }
 
     // Clean up the app thread
     activityApp->stopThread();
-    delete activityApp;
+
+    // TODO - Re-instate this
+    //delete activityApp;
+
     activity->instance = nullptr;
 }
 
@@ -145,7 +150,7 @@ void onResume(ANativeActivity* activity) {
     App* app = (App*)activity->instance;
     LOGV("Resume: %p\n", activity);
     if (app) {
-        app->postMessage({ Action::MSG_RESUME, 0 });
+        app->resumeThread();
     }
 }
 
@@ -153,7 +158,7 @@ void onPause(ANativeActivity* activity) {
     App* app = (App*)activity->instance;
     LOGV("Pause: %p\n", activity);
     if (app) {
-        app->postMessage({ Action::MSG_PAUSE, 0 });
+        app->suspendThread();
     }
 }
 
