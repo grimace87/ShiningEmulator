@@ -11,6 +11,8 @@ private:
 	Gbc gbc;
     InputSet gbcKeys;
     GbcAppState state;
+	AudioStreamer* audioStreamer;
+    Renderer* renderer;
     void updateState(uint64_t timeDiffMillis);
     void openRomFile(Resource* file);
 protected:
@@ -20,9 +22,12 @@ protected:
 public:
     GbcApp(AppPlatform& platform);
     ~GbcApp() override;
+	bool initObject() final;
+	void killObject() final;
 	Gbc* getGbc();
     void persistState(std::ostream& stream) override;
     void loadPersistentState(std::istream& stream) override;
     void doWork() override;
+	void requestWindowResize(int width, int height);
 };
 

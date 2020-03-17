@@ -7,32 +7,10 @@
 char* App::pendingFileToOpen = nullptr;
 
 App::App(AppPlatform& platform) : menu(Menu::buildMain()), platform(platform) {
-    renderer = nullptr;
-    audioStreamer = nullptr;
     platform.releaseAllInputs();
 }
 
 App::~App() = default;
-
-bool App::initObject() {
-    platform.onAppThreadStarted(this);
-    return createRenderer() && createAudioStreamer();
-}
-
-void App::killObject() {
-    if (renderer) {
-        renderer->stopThread();
-    }
-    if (audioStreamer) {
-        audioStreamer->stop();
-    }
-}
-
-void App::requestWindowResize(int width, int height) {
-    if (renderer) {
-        renderer->requestWindowResize(width, height);
-    }
-}
 
 void App::addCursor(int id, float xPixels, float yPixels) {
     platform.addCursor(threadMutex, id, xPixels, yPixels);

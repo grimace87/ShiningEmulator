@@ -14,14 +14,36 @@
 GbcApp::GbcApp(AppPlatform& platform) : App(platform), gbcKeys() {
     state = GbcAppState::MAIN_MENU;
     gbcKeys.clear();
+    renderer = nullptr;
+    audioStreamer = nullptr;
 }
 
 GbcApp::~GbcApp() {
     App::~App();
 }
 
+bool GbcApp::initObject() {
+    platform.onAppThreadStarted(this);
+    return createRenderer() && createAudioStreamer();
+}
+
+void GbcApp::killObject() {
+    if (renderer) {
+        renderer->stopThread();
+    }
+    if (audioStreamer) {
+        audioStreamer->stop();
+    }
+}
+
 Gbc* GbcApp::getGbc() {
 	return &gbc;
+}
+
+void GbcApp::requestWindowResize(int width, int height) {
+    if (renderer) {
+        renderer->requestWindowResize(width, height);
+    }
 }
 
 void GbcApp::persistState(std::ostream& stream) {
