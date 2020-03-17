@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-class RenderConfig;
+struct RenderConfig;
 class PlatformRenderer;
 class AppPlatform;
 

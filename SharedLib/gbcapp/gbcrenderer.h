@@ -1,10 +1,12 @@
 #pragma once
 
-#include "../renderer.h"
+#include "../thread.h"
+#include "../renderconfig.h"
 
 class Gbc;
 class TextButton;
 class Image;
+class AppPlatform;
 
 namespace FCT {
     const int RECT = 0;
@@ -24,18 +26,33 @@ namespace RCT {
     const int GAME_HUD = 0;
 }
 
-class GbcRenderer : public Renderer {
+class GbcRenderer : public Thread {
     unsigned int windowTextureHandle;
     Gbc* gbc;
     bool showFullUi;
+    bool frameQueued;
+    uint32_t frameState;
+    uint64_t frameTimeDiffMillis;
 protected:
     bool initObject() override;
     void doWork() override;
     void preCleanup() final;
 public:
-    GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* ggbc);
-    ~GbcRenderer() override;
+    GbcRenderer(AppPlatform* appPlatform, PlatformRenderer* platformRenderer, Gbc* gbc);
+    ~GbcRenderer();
+    void processMsg(const Message& msg) override;
+    void killObject() override;
+    bool signalFrameReady(uint64_t timeDiffMillis, uint32_t lockedAppState);
+    void requestWindowResize(int width, int height);
+    void queryCanvasSize(int* outWidth, int* outHeight);
+
     std::vector<TextButton> uiButtons;
     std::vector<Image> gameplayButtons;
+    int requestedWidth;
+    int requestedHeight;
+    std::condition_variable frameConditionVariable;
+    AppPlatform* appPlatform;
+    PlatformRenderer* platformRenderer;
+    std::vector<FrameConfig> frameConfigs;
 };
 

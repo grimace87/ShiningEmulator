@@ -9,7 +9,6 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         ../lib/lodepng/lodepng.cpp
         ../lib/libxbr-standalone/xbr.cpp
         menu.cpp
-        renderer.cpp
         resource.cpp
         shader.cpp
         thread.cpp

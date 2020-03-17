@@ -7,7 +7,7 @@
 #include "../gbc/gbc.h"
 #include "../resource.h"
 
-class Renderer;
+class GbcRenderer;
 class AudioStreamer;
 
 class GbcApp : public Thread {
@@ -16,7 +16,7 @@ private:
     InputSet gbcKeys;
     GbcAppState state;
 	AudioStreamer* audioStreamer;
-    Renderer* renderer;
+    GbcRenderer* renderer;
     void updateState(uint64_t timeDiffMillis);
     void openRomFile(Resource* file);
 protected:

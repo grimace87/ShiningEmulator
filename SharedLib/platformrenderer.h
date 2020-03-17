@@ -2,7 +2,7 @@
 
 #include <vector>
 
-class FrameConfig;
+struct FrameConfig;
 
 class PlatformRenderer {
 public:
