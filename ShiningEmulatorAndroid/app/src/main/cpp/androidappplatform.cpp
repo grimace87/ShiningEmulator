@@ -19,7 +19,7 @@
 #include "androidresource.h"
 #include "androidrenderer.h"
 #include "androidaudiostreamer.h"
-#include "../../../../../SharedLib/app.h"
+#include "../../../../../SharedLib/gbcapp/gbcapp.h"
 
 #include <android/log.h>
 
@@ -42,9 +42,6 @@ AndroidAppPlatform::AndroidAppPlatform(ANativeActivity* activity, ANativeWindow*
     // Clear state
     activity = nullptr;
     memset(&contentRect, 0, sizeof(ARect));
-    destroyRequested = 0;
-    destroyed = 0;
-    redrawNeeded = 0;
     memset(&pendingContentRect, 0, sizeof(ARect));
     javaActivityClass = nullptr;
 
@@ -52,8 +49,8 @@ AndroidAppPlatform::AndroidAppPlatform(ANativeActivity* activity, ANativeWindow*
     usesTouch = true;
 }
 
-bool AndroidAppPlatform::onAppThreadStarted(App* app) {
-    this->app = app;
+bool AndroidAppPlatform::onAppThreadStarted(Thread* app) {
+    this->app = dynamic_cast<GbcApp*>(app);
     return true;
 }
 

@@ -7,7 +7,7 @@
 #include <Windows.h>
 
 class WindowsAppPlatform : public AppPlatform {
-    bool onAppThreadStarted(App* app) override;
+    bool onAppThreadStarted(Thread* app) override;
     HINSTANCE hInstance;
     HWND hWnd;
     HDC hDC;

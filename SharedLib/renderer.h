@@ -3,9 +3,7 @@
 #include "thread.h"
 #include "renderconfig.h"
 
-class AppState;
 class AppPlatform;
-class Message;
 
 class Renderer : public Thread {
 public:

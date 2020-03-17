@@ -11,7 +11,7 @@
 class PlatformRenderer;
 class AudioStreamer;
 class Resource;
-class App;
+class Thread;
 class Gbc;
 
 enum class FileOpenMode {
@@ -33,7 +33,7 @@ public:
     bool keyboardInputs[256];
     GamepadInputs gamepadInputs;
     bool usesTouch = false;
-    virtual bool onAppThreadStarted(App* app) = 0;
+    virtual bool onAppThreadStarted(Thread* app) = 0;
     virtual PlatformRenderer* newPlatformRenderer() = 0;
     virtual AudioStreamer* newAudioStreamer(Gbc* gbc) = 0;
     virtual Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) = 0;

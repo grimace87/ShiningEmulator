@@ -11,16 +11,17 @@
 
 #include <string>
 
-GbcApp::GbcApp(AppPlatform& platform) : App(platform), gbcKeys() {
+char* GbcApp::pendingFileToOpen = nullptr;
+
+GbcApp::GbcApp(AppPlatform& platform) : menu(Menu::buildMain()), platform(platform), gbcKeys() {
+    platform.releaseAllInputs();
     state = GbcAppState::MAIN_MENU;
     gbcKeys.clear();
     renderer = nullptr;
     audioStreamer = nullptr;
 }
 
-GbcApp::~GbcApp() {
-    App::~App();
-}
+GbcApp::~GbcApp() = default;
 
 bool GbcApp::initObject() {
     platform.onAppThreadStarted(this);
@@ -113,10 +114,10 @@ void GbcApp::processMsg(const Message& msg) {
         }
             break;
         case Action::MSG_FILE_RETRIEVED:
-            if (App::pendingFileToOpen) {
-                Resource* resource = platform.getResource(App::pendingFileToOpen, false, false);
+            if (GbcApp::pendingFileToOpen) {
+                Resource* resource = platform.getResource(GbcApp::pendingFileToOpen, false, false);
                 if (resource) {
-                    std::string nameForSramFile(App::pendingFileToOpen);
+                    std::string nameForSramFile(GbcApp::pendingFileToOpen);
                     auto lastSlash = nameForSramFile.find_last_of("/\\", nameForSramFile.length());
                     if (lastSlash != std::string::npos) {
                         nameForSramFile = nameForSramFile.substr(lastSlash + 1);
@@ -136,6 +137,22 @@ void GbcApp::processMsg(const Message& msg) {
 			break;
         default: ;
     }
+}
+
+void GbcApp::addCursor(int id, float xPixels, float yPixels) {
+    platform.addCursor(threadMutex, id, xPixels, yPixels);
+}
+
+void GbcApp::updateCursor(int id, float xPixels, float yPixels) {
+    platform.updateCursor(threadMutex, id, xPixels, yPixels);
+}
+
+void GbcApp::removeCursor(int id) {
+    platform.removeCursor(threadMutex, id);
+}
+
+void GbcApp::removeAllCursors() {
+    platform.removeAllCursors(threadMutex);
 }
 
 bool GbcApp::createRenderer() {

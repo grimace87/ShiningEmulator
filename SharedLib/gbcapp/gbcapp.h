@@ -1,12 +1,16 @@
 #pragma once
 
-#include "../app.h"
+#include "../thread.h"
+#include "../menu.h"
 #include "gbcappstate.h"
 #include "../gbc/inputset.h"
 #include "../gbc/gbc.h"
 #include "../resource.h"
 
-class GbcApp : public App {
+class Renderer;
+class AudioStreamer;
+
+class GbcApp : public Thread {
 private:
 	Gbc gbc;
     InputSet gbcKeys;
@@ -17,17 +21,25 @@ private:
     void openRomFile(Resource* file);
 protected:
     void processMsg(const Message& msg) override;
-    bool createRenderer() override;
-    bool createAudioStreamer() override;
+    bool createRenderer();
+    bool createAudioStreamer();
 public:
     GbcApp(AppPlatform& platform);
-    ~GbcApp() override;
+    ~GbcApp();
 	bool initObject() final;
 	void killObject() final;
 	Gbc* getGbc();
-    void persistState(std::ostream& stream) override;
-    void loadPersistentState(std::istream& stream) override;
+    void persistState(std::ostream& stream);
+    void loadPersistentState(std::istream& stream);
     void doWork() override;
 	void requestWindowResize(int width, int height);
+    Menu menu;
+    AppPlatform& platform;
+    static char* pendingFileToOpen;
+    // Cursor modifiers merely call the equivalents on the AppPlatform object
+    void addCursor(int id, float xPixels, float yPixels);
+    void updateCursor(int id, float xPixels, float yPixels);
+    void removeCursor(int id);
+    void removeAllCursors();
 };
 

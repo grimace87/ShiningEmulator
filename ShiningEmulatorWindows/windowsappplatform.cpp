@@ -21,7 +21,7 @@ WindowsAppPlatform::WindowsAppPlatform(HINSTANCE hInstance, HWND hWnd, HDC hDC, 
 	this->usesTouch = false;
 }
 
-bool WindowsAppPlatform::onAppThreadStarted(App* app) {
+bool WindowsAppPlatform::onAppThreadStarted(Thread* app) {
     HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     return result == S_OK;
 }

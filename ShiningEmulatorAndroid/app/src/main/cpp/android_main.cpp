@@ -26,7 +26,6 @@
 #include <android/native_activity.h>
 
 #include "androidappplatform.h"
-#include "../../../../../SharedLib/app.h"
 #include "../../../../../SharedLib/resource.h"
 #include "../../../../../SharedLib/gbcapp/gbcapp.h"
 
@@ -112,7 +111,7 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
         newInstance->resumeThread();
     }
 
-    if (App::pendingFileToOpen) {
+    if (GbcApp::pendingFileToOpen) {
         newInstance->postMessage({ Action::MSG_FILE_RETRIEVED, 0 });
     }
 }
@@ -121,7 +120,7 @@ void onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
     LOGV("NativeWindowDestroyed: %p -- %p\n", activity, window);
 
     // Close existing renderer
-    App* activityApp = (App*)activity->instance;
+    GbcApp* activityApp = (GbcApp*)activity->instance;
     if (activityApp == nullptr) {
         return;
     }
@@ -147,7 +146,7 @@ void onStart(ANativeActivity* activity) {
 }
 
 void onResume(ANativeActivity* activity) {
-    App* app = (App*)activity->instance;
+    GbcApp* app = (GbcApp*)activity->instance;
     LOGV("Resume: %p\n", activity);
     if (app) {
         app->resumeThread();
@@ -155,7 +154,7 @@ void onResume(ANativeActivity* activity) {
 }
 
 void onPause(ANativeActivity* activity) {
-    App* app = (App*)activity->instance;
+    GbcApp* app = (GbcApp*)activity->instance;
     LOGV("Pause: %p\n", activity);
     if (app) {
         app->suspendThread();
@@ -219,7 +218,7 @@ void onWindowFocusChanged(ANativeActivity* activity, int focused) {
 int processInputEvents(int fd, int events, void* data) {
     if (inputQueue) {
         auto activity = (ANativeActivity*)data;
-        App* app = (App*)activity->instance;
+        GbcApp* app = (GbcApp*)activity->instance;
         AInputEvent* event;
         if (AInputQueue_hasEvents(inputQueue)) {
             while (AInputQueue_getEvent(inputQueue, &event) >= 0) {
@@ -242,7 +241,7 @@ int processInputEvents(int fd, int events, void* data) {
 extern "C" {
 
 JNIEXPORT void JNICALL Java_com_grimace_shiningemulatorandroid_MainActivity_filePicked(JNIEnv *env, jobject thisObject, jstring fileName) {
-    App::pendingFileToOpen = (char*)env->GetStringUTFChars(fileName, nullptr);
+    GbcApp::pendingFileToOpen = (char*)env->GetStringUTFChars(fileName, nullptr);
 }
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {

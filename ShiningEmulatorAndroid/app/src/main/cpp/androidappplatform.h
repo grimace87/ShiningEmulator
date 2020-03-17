@@ -22,18 +22,18 @@
 #include <android/native_window.h>
 #include <android/native_activity.h>
 
+class GbcApp;
+
 class AndroidAppPlatform final : public AppPlatform {
-	App* app;
+	GbcApp* app;
 	jclass javaActivityClass;
-    int destroyed;
-    int redrawNeeded;
 	ANativeWindow* window;
     ARect pendingContentRect;
     int handleKeyboardEvent(uint32_t keyCode, bool keyDown);
     int handleGamepadInput(int32_t keyCode, bool keyDown);
 
 protected:
-	bool onAppThreadStarted(App* app) override;
+	bool onAppThreadStarted(Thread* app) override;
 	uint64_t getUptimeMillis() override;
 
 public:
@@ -54,6 +54,5 @@ public:
     // Current content rectangle of the window; this is the area where the
     // window's content should be placed to be seen by the user.
     ARect contentRect;
-    int destroyRequested;
 
 };
