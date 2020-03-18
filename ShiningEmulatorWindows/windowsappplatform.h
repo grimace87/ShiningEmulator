@@ -24,7 +24,8 @@ public:
     AudioStreamer* newAudioStreamer(Gbc* gbc) final;
     Resource* getResource(const char* fileName, bool isAsset, bool isGlShader) override;
     Resource* chooseFile(std::string fileTypeDescr, std::vector<std::string> fileTypes) override;
-    std::fstream openFileInAppDir(std::string fileName, FileOpenMode mode) override;
+    std::string getAppDir() override;
+    char getSeparator() override;
 	void openDebugWindow(Gbc* gbc) override;
     void withCurrentTime(std::function<void(struct tm*)> func) override;
     void pollGamepad() override;

@@ -104,7 +104,8 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
     activity->instance = newInstance;
 
     // Attempt to restore state
-    std::fstream stream = newInstance->platform.openFileInAppDir(CROSS_WINDOW_PERSISTENCE_FILE, FileOpenMode::READ_ONLY_BINARY);
+    std::string fullPathedPersistenceFile = newInstance->platform.appendFileNameToAppDir((std::string&)CROSS_WINDOW_PERSISTENCE_FILE);
+    std::fstream stream = newInstance->platform.openFile(fullPathedPersistenceFile, FileOpenMode::READ_ONLY_BINARY);
     if (stream.is_open()) {
         newInstance->suspendThread();
         newInstance->loadPersistentState(stream);
@@ -126,7 +127,8 @@ void onNativeWindowDestroyed(ANativeActivity* activity, ANativeWindow* window) {
     }
 
     // Persist current state so it may be restored next time a window is created
-    std::fstream stream = activityApp->platform.openFileInAppDir(CROSS_WINDOW_PERSISTENCE_FILE, FileOpenMode::WRITE_NEW_FILE_BINARY);
+    std::string fullPathedPersistenceFile = activityApp->platform.appendFileNameToAppDir((std::string&)CROSS_WINDOW_PERSISTENCE_FILE);
+    std::fstream stream = activityApp->platform.openFile(fullPathedPersistenceFile, FileOpenMode::WRITE_NEW_FILE_BINARY);
     if (stream.is_open()) {
         activityApp->persistState(stream);
     }

@@ -121,40 +121,26 @@ Resource* WindowsAppPlatform::chooseFile(std::string fileTypeDescr, std::vector<
 }
 
 
-std::fstream WindowsAppPlatform::openFileInAppDir(std::string fileName, FileOpenMode mode) {
-
-    // Create a stream object, open a file if possible, will be returned regardless
-    std::fstream stream;
+std::string WindowsAppPlatform::getAppDir() {
 
     // Get path and filename of running app
     char path[512];
     int bytesCopied = GetModuleFileNameA(NULL, (LPSTR)&path, 512);
     if (bytesCopied == 0) {
-        return stream;
+        return "";
     }
     std::string pathOfRunningApp = path;
 
-    // Get directory of the running app (including the final slash at the end)
+    // Return directory of the running app (not including the final slash at the end)
     size_t lastSlash = pathOfRunningApp.find_last_of("/\\");
     if (lastSlash == std::string::npos) {
-        return stream;
+        return "";
     }
-    std::string runningAppDirectory = pathOfRunningApp.substr(0, lastSlash + 1);
+    return pathOfRunningApp.substr(0, lastSlash);
+}
 
-    // Extract the file name and extension of the requested file
-    size_t lastSlashInRequestedFilePath = fileName.find_last_of("/\\");
-    std::string useFileName;
-    if (lastSlashInRequestedFilePath == std::string::npos) {
-        useFileName = fileName;
-    } else {
-        useFileName = fileName.substr(lastSlashInRequestedFilePath + 1);
-    }
-
-    // Form the full path of a new file in this same directory
-    std::string fullPathOfNewFile = runningAppDirectory + useFileName;
-    std::ios_base::openmode openMode = AppPlatform::makeOpenFlags(mode);
-    stream.open(fullPathOfNewFile, openMode);
-    return stream;
+char WindowsAppPlatform::getSeparator() {
+    return '\\';
 }
 
 void WindowsAppPlatform::openDebugWindow(Gbc* gbc) {

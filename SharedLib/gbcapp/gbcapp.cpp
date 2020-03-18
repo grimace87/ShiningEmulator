@@ -114,12 +114,7 @@ void GbcApp::processMsg(const Message& msg) {
             if (!GbcApp::pendingFileToOpen.empty()) {
                 Resource* resource = platform.getResource(GbcApp::pendingFileToOpen.c_str(), false, false);
                 if (resource) {
-                    std::string nameForSramFile(GbcApp::pendingFileToOpen);
-                    auto lastSlash = nameForSramFile.find_last_of("/\\", nameForSramFile.length());
-                    if (lastSlash != std::string::npos) {
-                        nameForSramFile = nameForSramFile.substr(lastSlash + 1);
-                    }
-                    gbc.loadRom(nameForSramFile, resource->rawStream, resource->rawDataLength, platform);
+                    gbc.loadRom(GbcApp::pendingFileToOpen, resource->rawStream, resource->rawDataLength, platform);
                     if (gbc.romProperties.valid) {
                         state = GbcAppState::PLAYING;
                         gbc.reset();
@@ -317,14 +312,18 @@ void GbcApp::doWork() {
                 }
             } else if (loadSaveStateButton.containsCoords(downXUnits, downYUnits)) {
                 if (!cursor.downHandled) {
-                    std::fstream file = platform.openFileInAppDir("temp.gss", FileOpenMode::READ_ONLY_BINARY);
+                    std::string saveStateFileName = "temp.gss";
+                    std::string fullPathedStateFile = platform.appendFileNameToAppDir(saveStateFileName);
+                    std::fstream file = platform.openFile(fullPathedStateFile, FileOpenMode::READ_ONLY_BINARY);
                     if (file.is_open()) {
                         gbc.loadSaveState(file);
                     }
                 }
             } else if (saveSaveStateButton.containsCoords(downXUnits, downYUnits)) {
                 if (!cursor.downHandled) {
-                    std::fstream file = platform.openFileInAppDir("temp.gss", FileOpenMode::WRITE_NEW_FILE_BINARY);
+                    std::string saveStateFileName = "temp.gss";
+                    std::string fullPathedStateFile = platform.appendFileNameToAppDir(saveStateFileName);
+                    std::fstream file = platform.openFile(fullPathedStateFile, FileOpenMode::WRITE_NEW_FILE_BINARY);
                     if (file.is_open()) {
                         gbc.saveSaveState(file);
                     }

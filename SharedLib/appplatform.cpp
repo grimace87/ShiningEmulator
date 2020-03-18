@@ -41,3 +41,32 @@ void AppPlatform::releaseAllInputs() {
         keyboardInputs[c] = false;
     }
 }
+
+std::string AppPlatform::stripPath(std::string& fullPathedName) {
+    size_t lastSlash = fullPathedName.find_last_of(getSeparator());
+    if (lastSlash == std::string::npos) {
+        return fullPathedName;
+    }
+    if ((lastSlash + 1) == fullPathedName.length()) {
+        return "";
+    }
+    return fullPathedName.substr(lastSlash + 1);
+}
+
+std::string AppPlatform::appendFileNameToAppDir(std::string& fileName) {
+    return getAppDir() + getSeparator() + fileName;
+}
+
+std::string AppPlatform::replaceExtension(std::string& originalFileName, std::string& extensionLetters) {
+    size_t lastPeriod = originalFileName.find_last_of('.');
+    if (lastPeriod == std::string::npos) {
+        return originalFileName;
+    }
+    return originalFileName.substr(0, lastPeriod) + '.' + extensionLetters;
+}
+
+std::fstream AppPlatform::openFile(std::string& fullPathedName, FileOpenMode mode) {
+    std::fstream stream;
+    stream.open(fullPathedName, AppPlatform::makeOpenFlags(mode));
+    return stream;
+}

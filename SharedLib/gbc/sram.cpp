@@ -20,25 +20,19 @@ void Sram::openSramFile(std::string& romFileName, AppPlatform& appPlatform) {
         return;
     }
 
-    size_t lastSlashPos = romFileName.find_last_of("/\\");
-    if (lastSlashPos == std::string::npos) {
-        lastSlashPos = 0;
-    } else {
-        lastSlashPos++;
+    // Get save file name, based on ROM file name, but in app directory, and with extension '.gsv'
+    std::string saveFileInAppDir;
+    {
+        std::string fileNameOnly = appPlatform.stripPath(romFileName);
+        std::string saveFileExtension = "gsv";
+        std::string saveFileName = appPlatform.replaceExtension(fileNameOnly, saveFileExtension);
+        saveFileInAppDir = appPlatform.appendFileNameToAppDir(saveFileName);
     }
 
-    std::string fileNameWithoutPath = romFileName.substr(lastSlashPos);
-    size_t dotPosition = fileNameWithoutPath.find_last_of('.');
-    std::string batteryFileWithoutPath;
-    if (dotPosition == std::string::npos) {
-        batteryFileWithoutPath = fileNameWithoutPath + ".gsv";
-    } else {
-        batteryFileWithoutPath = fileNameWithoutPath.substr(0, dotPosition) + ".gsv";
-    }
-
-    sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, FileOpenMode::RANDOM_READ_WRITE_BINARY); // In/out, must exist
+    // Open file if exists, else create it
+    sramFile = appPlatform.openFile(saveFileInAppDir, FileOpenMode::RANDOM_READ_WRITE_BINARY); // In/out, must exist
     if (!sramFile.is_open()) {
-        std::fstream createdFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, FileOpenMode::WRITE_NEW_FILE_BINARY); // Create empty file for writing
+        std::fstream createdFile = appPlatform.openFile(saveFileInAppDir, FileOpenMode::WRITE_NEW_FILE_BINARY); // Create empty file for writing
         if (!createdFile.is_open()) {
             return;
         }
@@ -63,7 +57,7 @@ void Sram::openSramFile(std::string& romFileName, AppPlatform& appPlatform) {
 
         // Close file, re-open for in/out
         createdFile.close();
-        sramFile = appPlatform.openFileInAppDir(batteryFileWithoutPath, FileOpenMode::RANDOM_READ_WRITE_BINARY);
+        sramFile = appPlatform.openFile(saveFileInAppDir, FileOpenMode::RANDOM_READ_WRITE_BINARY);
     } else {
         // Get file size, read in saved data, verify timer data if needed
         sramFile.seekg(std::ios_base::end);
