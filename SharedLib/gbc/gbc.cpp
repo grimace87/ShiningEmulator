@@ -6217,7 +6217,7 @@ void Gbc::slowDown() {
 }
 
 #define READ_STREAM(var, type) stream.read(reinterpret_cast<char*>(&var), sizeof(type))
-#define READ_STREAM_A(var, type, count) stream.read(reinterpret_cast<char*>(&var), sizeof(type) * count)
+#define READ_STREAM_A(var, type, count) stream.read(reinterpret_cast<char*>(var), sizeof(type) * count)
 void Gbc::loadSaveState(std::istream& stream) {
     READ_STREAM(cpuPc, uint32_t);
     READ_STREAM(cpuSp, uint32_t);
@@ -6309,7 +6309,7 @@ void Gbc::loadSaveState(std::istream& stream) {
 }
 
 #define WRITE_STREAM(var, type) stream.write(reinterpret_cast<char*>(&var), sizeof(type))
-#define WRITE_STREAM_A(var, type, count) stream.write(reinterpret_cast<char*>(&var), sizeof(type) * count)
+#define WRITE_STREAM_A(var, type, count) stream.write(reinterpret_cast<char*>(var), sizeof(type) * count)
 void Gbc::saveSaveState(std::ostream& stream) {
     WRITE_STREAM(cpuPc, uint32_t);
     WRITE_STREAM(cpuSp, uint32_t);

@@ -74,23 +74,20 @@ void GbcApp::loadPersistentState(std::istream& stream) {
             state = GbcAppState::MAIN_MENU;
             return;
         }
-        char* fileNameChars = new char[stringLength + 1];
-        stream.read(fileNameChars, stringLength * sizeof(char));
-        fileNameChars[stringLength] = '\0';
+        std::string fileName(stringLength + 1, '\0');
+        stream.read((char*)fileName.c_str(), stringLength * sizeof(char));
 
         // TODO - Open a file properly!!!
-        Resource* file = platform.getResource(fileNameChars, false, false);
+        std::unique_ptr<Resource> file(platform.getResource(fileName.c_str(), false, false));
         if (file) {
-            openRomFile(file);
-            gbc.loadSaveState(stream);
-            delete file;
-        } else {
-            state = GbcAppState::MAIN_MENU;
+            openRomFile(file.get());
+            if (gbc.romProperties.valid) {
+                gbc.loadSaveState(stream);
+                return;
+            }
         }
-        delete[] fileNameChars;
-    } else {
-        state = GbcAppState::MAIN_MENU;
     }
+    state = GbcAppState::MAIN_MENU;
 }
 
 void GbcApp::openRomFile(Resource* file) {
