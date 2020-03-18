@@ -111,7 +111,7 @@ void onNativeWindowCreated(ANativeActivity* activity, ANativeWindow* window) {
         newInstance->resumeThread();
     }
 
-    if (GbcApp::pendingFileToOpen) {
+    if (!GbcApp::pendingFileToOpen.empty()) {
         newInstance->postMessage({ Action::MSG_FILE_RETRIEVED, 0 });
     }
 }

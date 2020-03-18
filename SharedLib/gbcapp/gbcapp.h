@@ -35,7 +35,7 @@ public:
 	void requestWindowResize(int width, int height);
     Menu menu;
     AppPlatform& platform;
-    static char* pendingFileToOpen;
+    static std::string pendingFileToOpen;
     // Cursor modifiers merely call the equivalents on the AppPlatform object
     void addCursor(int id, float xPixels, float yPixels);
     void updateCursor(int id, float xPixels, float yPixels);

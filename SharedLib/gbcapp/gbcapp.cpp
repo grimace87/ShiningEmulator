@@ -11,7 +11,7 @@
 
 #include <string>
 
-char* GbcApp::pendingFileToOpen = nullptr;
+std::string GbcApp::pendingFileToOpen;
 
 GbcApp::GbcApp(AppPlatform& platform) : menu(Menu::buildMain()), platform(platform), gbcKeys() {
     platform.releaseAllInputs();
@@ -114,8 +114,8 @@ void GbcApp::processMsg(const Message& msg) {
         }
             break;
         case Action::MSG_FILE_RETRIEVED:
-            if (GbcApp::pendingFileToOpen) {
-                Resource* resource = platform.getResource(GbcApp::pendingFileToOpen, false, false);
+            if (!GbcApp::pendingFileToOpen.empty()) {
+                Resource* resource = platform.getResource(GbcApp::pendingFileToOpen.c_str(), false, false);
                 if (resource) {
                     std::string nameForSramFile(GbcApp::pendingFileToOpen);
                     auto lastSlash = nameForSramFile.find_last_of("/\\", nameForSramFile.length());
@@ -128,6 +128,8 @@ void GbcApp::processMsg(const Message& msg) {
                         gbc.reset();
                     }
                 }
+                delete resource;
+                GbcApp::pendingFileToOpen = "";
             }
             break;
         case Action::MSG_UNUSED:
