@@ -274,6 +274,8 @@ void GbcApp::doWork() {
             auto& fasterButton = renderer->gameplayButtons[BTN_INDEX_FASTER];
             auto& loadSaveStateButton = renderer->gameplayButtons[BTN_INDEX_LOAD_SS];
             auto& saveSaveStateButton = renderer->gameplayButtons[BTN_INDEX_SAVE_SS];
+            auto& powerOffButton = renderer->gameplayButtons[BTN_INDEX_POWER_OFF];
+            auto& resetRomButton = renderer->gameplayButtons[BTN_INDEX_RESET_ROM];
             if (dpadButton.containsCoords(downXUnits, downYUnits)) {
                 auto compassMask = dpadButton.compassFromCentre(currentXUnits, currentYUnits);
                 if (compassMask & (unsigned int)CompassMask::NORTH) {
@@ -327,6 +329,15 @@ void GbcApp::doWork() {
                     if (file.is_open()) {
                         gbc.saveSaveState(file);
                     }
+                }
+            } else if (powerOffButton.containsCoords(downXUnits, downYUnits)) {
+                if (!cursor.downHandled) {
+                    state = GbcAppState::MAIN_MENU;
+                    gbc.isRunning = false;
+                }
+            } else if (resetRomButton.containsCoords(downXUnits, downYUnits)) {
+                if (!cursor.downHandled) {
+                    gbc.reset();
                 }
             }
         }

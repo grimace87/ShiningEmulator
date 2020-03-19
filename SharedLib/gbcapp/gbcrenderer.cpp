@@ -122,10 +122,10 @@ bool GbcRenderer::initObject() {
     // Modify the HUD config according to how much ought to be shown
     if (showFullUi) {
         config4.startVertex = 0;
-        config4.vertexCount = 78;
+        config4.vertexCount = 102;
     } else {
         config4.startVertex = 54;
-        config4.vertexCount = 24;
+        config4.vertexCount = 48;
     }
 
     // Create the frame config objects

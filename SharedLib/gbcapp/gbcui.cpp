@@ -62,6 +62,22 @@ void GbcUi::populateGameplayButtonsVector(std::vector<Image>& buttons, bool wide
     buttonMargins = { 0.0f, widescreen ? 0.125f : 0.25f, 0.125f, 0.0f };
     buttonBgTextureBounds = { 0.375f, 0.5f, 0.5f, 0.625f };
     auto saveSaveStateButton = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::END);
+    buttonSize = { 0.125f, 0.25f };
+    buttonMargins = { 0.0f, widescreen ? 0.125f : 0.25f, 0.1875f, 0.0f };
+    buttonBgTextureBounds = { 0.875f, 0.375f, 1.0f, 0.4375f };
+    auto powerOffButtonBackground = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::MIDDLE);
+    buttonSize = { 0.125f, 0.25f };
+    buttonMargins = { 0.0f, widescreen ? 0.125f : 0.25f, 0.1875f, 0.0f };
+    buttonBgTextureBounds = { 0.75f, 0.5f, 0.875f, 0.5625f };
+    auto powerOffButton = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::MIDDLE);
+    buttonSize = { 0.125f, 0.25f };
+    buttonMargins = { 0.1875f, widescreen ? 0.125f : 0.25f, 0.0f, 0.0f };
+    buttonBgTextureBounds = { 0.875f, 0.375f, 1.0f, 0.4375f };
+    auto resetRomButtonBackground = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::MIDDLE);
+    buttonSize = { 0.125f, 0.25f };
+    buttonMargins = { 0.1875f, widescreen ? 0.125f : 0.25f, 0.0f, 0.0f };
+    buttonBgTextureBounds = { 0.75f, 0.5625f, 0.875f, 0.625f };
+    auto resetRomButton = Image(texture, buttonSize, buttonMargins, buttonBgTextureBounds, Gravity::START, Gravity::MIDDLE);
 
     // Copy these buttons into the supplied list
     buttons.clear();
@@ -78,4 +94,8 @@ void GbcUi::populateGameplayButtonsVector(std::vector<Image>& buttons, bool wide
     buttons.push_back(fasterButton);
     buttons.push_back(loadSaveStateButton);
     buttons.push_back(saveSaveStateButton);
+    buttons.push_back(powerOffButtonBackground);
+    buttons.push_back(powerOffButton);
+    buttons.push_back(resetRomButtonBackground);
+    buttons.push_back(resetRomButton);
 }
