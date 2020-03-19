@@ -5,7 +5,6 @@
 
 class AndroidAudioStreamer : public AudioStreamer, oboe::AudioStreamCallback {
     oboe::AudioStream* stream;
-    bool isPlaying;
 
     oboe::DataCallbackResult
     onAudioReady(oboe::AudioStream* oboeStream, void* audioData, int32_t numFrames) override;

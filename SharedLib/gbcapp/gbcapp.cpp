@@ -96,6 +96,9 @@ void GbcApp::openRomFile(Resource* file) {
         if (gbc.romProperties.valid) {
             state = GbcAppState::PLAYING;
             gbc.reset();
+            if (!audioStreamer->isPlaying) {
+                audioStreamer->start();
+            }
         }
     }
 }
@@ -334,10 +337,13 @@ void GbcApp::doWork() {
                 if (!cursor.downHandled) {
                     state = GbcAppState::MAIN_MENU;
                     gbc.isRunning = false;
+                    audioStreamer->stop();
+                    break;
                 }
             } else if (resetRomButton.containsCoords(downXUnits, downYUnits)) {
                 if (!cursor.downHandled) {
                     gbc.reset();
+                    break;
                 }
             }
         }

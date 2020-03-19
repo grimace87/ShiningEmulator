@@ -8,7 +8,6 @@
 #include <thread>
 
 class WindowsAudioStreamer: public AudioStreamer {
-    bool isPlaying;
     bool initialised;
     HANDLE hEvent;
     IMMDeviceEnumerator* deviceEnumerator;
