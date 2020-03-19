@@ -27,6 +27,9 @@ MSG msg;
 // App instance (if any)
 GbcApp* runningApp = nullptr;
 
+// File name in which to save cross-instance state
+const std::string CROSS_WINDOW_PERSISTENCE_FILE = "window_state.gss";
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
 
     UNREFERENCED_PARAMETER(hPrevInstance);
@@ -89,12 +92,33 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     hMenu = makeMenu(runningApp->menu);
     SetMenu(hWnd, hMenu);
 
+    // Attempt to restore state
+    std::string fullPathedPersistenceFile = runningApp->platform.appendFileNameToAppDir((std::string&)CROSS_WINDOW_PERSISTENCE_FILE);
+    {
+        std::fstream stream = runningApp->platform.openFile(fullPathedPersistenceFile, FileOpenMode::READ_ONLY_BINARY);
+        if (stream.is_open()) {
+            runningApp->suspendThread();
+            runningApp->loadPersistentState(stream);
+            runningApp->resumeThread();
+        }
+    }
+
     // Run standard Windows message loop
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0) && runningApp->isRunning()) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    // Persist current state so it may be restored next time a window is created
+    {
+        std::fstream stream = runningApp->platform.openFile(fullPathedPersistenceFile, FileOpenMode::WRITE_NEW_FILE_BINARY);
+        if (stream.is_open()) {
+            runningApp->persistState(stream);
+        }
+    }
+
+    // Stop app thread, then clean up
     runningApp->stopThread();
     delete runningApp;
     runningApp = nullptr;
