@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <vector>
 
 class Gbc {
     friend class DebugUtils;
@@ -99,10 +100,10 @@ public:
     FrameManager frameManager;
 
     // Block memory accessible by debug window
-    uint8_t* rom;
-    uint8_t* wram;
-    uint8_t* vram;
-    uint8_t* ioPorts;
+    std::vector<uint8_t> rom;
+    std::vector<uint8_t> wram;
+    std::vector<uint8_t> vram;
+    std::vector<uint8_t> ioPorts;
 
     // Sprite data
     uint8_t oam[160]{};

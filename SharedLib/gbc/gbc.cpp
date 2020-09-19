@@ -69,10 +69,10 @@ Gbc::Gbc() {
     currentClockMultiplierCombo = 10;
 
     // Allocate emulated RAM
-    rom = new uint8_t[256 * 16384];
-    wram = new uint8_t[4 * 4096];
-    vram = new uint8_t[2 * 8192];
-    ioPorts = new uint8_t[256];
+    rom.resize(256 * 16384);
+    wram.resize(8 * 4096);
+    vram.resize(2 * 8192);
+    ioPorts.resize(256);
     tileSet = new uint32_t[2 * 384 * 8 * 8]; // 2 VRAM banks, 384 tiles, 8 rows, 8 pixels per row
     sgb.monoData = new uint32_t[160 * 152];
     sgb.mappedVramForTrnOp = new uint8_t[4096];
@@ -85,10 +85,6 @@ Gbc::Gbc() {
 
 Gbc::~Gbc() {
     // Release emulated RAM
-    delete[] rom;
-    delete[] wram;
-    delete[] vram;
-    delete[] ioPorts;
     delete[] tileSet;
     delete[] sgb.monoData;
     delete[] sgb.mappedVramForTrnOp;
@@ -383,7 +379,7 @@ bool Gbc::loadRom(std::string fileName, const uint8_t* data, int dataLength, App
     if (dataLength > 4194304) {
         dataLength = 4194304;
     }
-    memcpy(rom, data, dataLength);
+    memcpy(rom.data(), data, dataLength);
 
     // Remember this file to re-open next time
     //saveLastFileName(FileName, 512);
@@ -434,8 +430,8 @@ void Gbc::reset() {
     std::fill(sgb.chrPalettes, sgb.chrPalettes + 18 * 20, 0);
 
     // Resetting IO ports may avoid graphical glitches when switching to a colour game. Clearing VRAM may help too.
-    std::fill(ioPorts, ioPorts + 256, 0);
-    std::fill(vram, vram + 16384, 0);
+    std::fill(ioPorts.data(), ioPorts.data() + 256, 0);
+    std::fill(vram.data(), vram.data() + 16384, 0);
 
     // Initialise emulated memory, registers, IO
     bankOffset = 0x4000;
@@ -520,7 +516,7 @@ void Gbc::reset() {
     }
 
     // Other stuff:
-    audioUnit.reset(ioPorts, cpuClockFreq);
+    audioUnit.reset(ioPorts.data(), cpuClockFreq);
     serialTimer = 0;
     cpuDividerCount = 0;
     cpuTimerCount = 0;
@@ -6257,9 +6253,9 @@ void Gbc::loadSaveState(std::istream& stream) {
     READ_STREAM(bankOffset, uint32_t);
     READ_STREAM(wramBankOffset, uint32_t);
     READ_STREAM(vramBankOffset, uint32_t);
-    READ_STREAM_A(wram, uint8_t, 4 * 4096);
-    READ_STREAM_A(vram, uint8_t, 2 * 8192);
-    READ_STREAM_A(ioPorts, uint8_t, 256);
+    READ_STREAM_A(wram.data(), uint8_t, 8 * 4096);
+    READ_STREAM_A(vram.data(), uint8_t, 2 * 8192);
+    READ_STREAM_A(ioPorts.data(), uint8_t, 256);
     READ_STREAM_A(oam, uint8_t, 160);
     READ_STREAM_A(tileSet, uint32_t, 2 * 384 * 8 * 8);
     READ_STREAM(sgb.readingCommand, bool);
@@ -6349,9 +6345,9 @@ void Gbc::saveSaveState(std::ostream& stream) {
     WRITE_STREAM(bankOffset, uint32_t);
     WRITE_STREAM(wramBankOffset, uint32_t);
     WRITE_STREAM(vramBankOffset, uint32_t);
-    WRITE_STREAM_A(wram, uint8_t, 4 * 4096);
-    WRITE_STREAM_A(vram, uint8_t, 2 * 8192);
-    WRITE_STREAM_A(ioPorts, uint8_t, 256);
+    WRITE_STREAM_A(wram.data(), uint8_t, 8 * 4096);
+    WRITE_STREAM_A(vram.data(), uint8_t, 2 * 8192);
+    WRITE_STREAM_A(ioPorts.data(), uint8_t, 256);
     WRITE_STREAM_A(oam, uint8_t, 160);
     WRITE_STREAM_A(tileSet, uint32_t, 2 * 384 * 8 * 8);
     WRITE_STREAM(sgb.readingCommand, bool);

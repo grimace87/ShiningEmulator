@@ -446,7 +446,7 @@ void SgbModule::mapVramForTrnOp(Gbc* gbc) {
     // Assumes a certain display configuration and does not account for variances
     // This includes display enable, background not scrolled, window and sprites not on-screen,
     // and the BGP palette register has a certain value (possibly 0xe4)
-    unsigned char* vram = gbc->vram;
+    auto vram = (unsigned char*)gbc->vram.data();
     unsigned char lcdControl = gbc->ioPorts[0x40];
     unsigned int mapStart = lcdControl & 0x08 ? 0x1c00 : 0x1800;
     unsigned int charsStart, charCodeInverter;
