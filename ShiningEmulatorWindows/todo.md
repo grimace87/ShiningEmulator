@@ -17,7 +17,6 @@
 #### From Donkey Kong Land 2
 
 - Graphics are corrupted by loading while emulated VRAM is inaccessible
-- After letting title screen go on for a while the audio channel balance is clearly not right
 - Several sound channels are doing very weird things
 
 #### From Link's Awakening
@@ -38,3 +37,4 @@
 #### Wario Land 3
 
 - Save games after reaching a certain amount of progress do not load
+- First level - Wario and spear dudes are invisible behind grass
