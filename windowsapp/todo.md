@@ -18,6 +18,7 @@
 
 - Graphics are corrupted by loading while emulated VRAM is inaccessible
 - Several sound channels are doing very weird things
+- Pausing in the frist level darkens colours permanently (until exiting stage)
 
 #### From Link's Awakening
 

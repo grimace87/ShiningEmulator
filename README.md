@@ -7,7 +7,8 @@ Does not include any games, and never will include any games that aren't made fr
 
 #### Building
 
-- Windows project based on root-level CMakeLists.txt; tested using CLion. Open the root directory and load the CMakeLists.txt. Requires the MSVC toolchain installed (install Visual Studio with C++ Desktop development components).
+- Windows project based on root-level CMakeLists.txt; tested using CLion and Visual Studio 2019. Open the root directory and
+  load the CMakeLists.txt. Requires the MSVC toolchain installed (install Visual Studio with C++ Desktop development components).
 - Android project based on root-level build.gradle; tested using Android Studio. Import the project in the root directory.
 
 #### Library dependencies
