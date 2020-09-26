@@ -1,0 +1,12 @@
+[submodule "androidapp/libs/oboe"]
+	path = androidapp/libs/oboe
+	url = https://github.com/google/oboe
+[submodule "lib/OpenGL-Registry"]
+	path = lib/OpenGL-Registry
+	url = https://github.com/KhronosGroup/OpenGL-Registry
+[submodule "lib/lodepng"]
+	path = lib/lodepng
+	url = https://github.com/lvandeve/lodepng.git
+[submodule "lib/glm"]
+	path = lib/glm
+	url = https://github.com/g-truc/glm.git

@@ -26,4 +26,7 @@ add_library(SharedLib ${BUILD_SHARED_LIBS}
         gbcapp/gbcui.cpp
         gbc/audiounit.cpp)
 
-target_include_directories(SharedLib PRIVATE ../lib)
+target_include_directories(SharedLib PRIVATE
+        ../lib/lodepng
+        ../lib/libxbr-standalone
+        ../lib/glm)

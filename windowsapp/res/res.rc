@@ -1,0 +1,70 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "res.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON_MAIN           ICON                    "../../assets/ic_main.ico"
+
+IDI_ICON_SMALL          ICON                    "../../assets/ic_small.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// PNG
+//
+
+IDB_TEXTURE_MUSICA      PNG                     "../../assets/Musica.png"
+
+IDB_TEXTURE_MAIN        PNG                     "../../assets/tex_main.png"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// FONT_DESC
+//
+
+IDB_FONT_DESC_MUSICA    FONT_DESC               "../../assets/Musica.fnt"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// GLSHADER
+//
+
+IDR_GLSHADER_VS_MAIN    GLSHADER                "../../assets/gl/vs_main.glsl"
+
+IDR_GLSHADER_FS_MAIN    GLSHADER                "../../assets/gl/fs_main.glsl"
+
+IDR_GLSHADER_VS_NORMAL  GLSHADER                "../../assets/gl/vs_normal.glsl"
+
+IDR_GLSHADER_FS_NORMAL  GLSHADER                "../../assets/gl/fs_normal.glsl"
+
+IDR_GLSHADER_FS_TEXT    GLSHADER                "../../assets/gl/fs_text.glsl"
+
+
+/////////////////////////////////////////////////////////////////////////////
+
+
+#endif    EN

@@ -1,8 +1,22 @@
 
 # IDEs
-.vs
-.idea
+.vs/
+.idea/
 
 # Build
-cmake-build-debug
-out
+cmake-build-debug/
+out/
+build/
+
+# Misc
+.DS_Store
+
+# Android
+*.iml
+.gradle/
+/local.properties
+/captures/
+.externalNativeBuild/
+.cxx/
+/androidapp/debug
+/androidapp/release

@@ -1,9 +1,9 @@
 #include "gbcrenderer.h"
 
 #define GLM_PRECISION_MEDIUMP_FLOAT
-#include "../lib/glm/matrix.hpp"
-#include "../lib/glm/gtc/matrix_transform.hpp"
-#include "../lib/glm/gtc/type_ptr.hpp"
+#include <glm/matrix.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "uibuffers.h"
 #include "gbcappstate.h"

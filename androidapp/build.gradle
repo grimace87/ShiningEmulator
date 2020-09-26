@@ -1,0 +1,54 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 30
+    buildToolsVersion "30.0.2"
+    ndkVersion '21.3.6528147'
+
+    signingConfigs {
+        release {
+            storeFile file('C:\\Users\\Thomas\\grimace_keystore.jks')
+            storePassword 'a7yt4jf83494ga4gua9w'
+            keyAlias = 'key0'
+            keyPassword 'ha8a4ya38y93ayf031rr'
+        }
+    }
+
+    defaultConfig {
+        applicationId "com.grimace.shiningemulatorandroid"
+        minSdkVersion 18
+        targetSdkVersion 30
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_static'
+                cppFlags '-std=c++14'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            debuggable true
+            minifyEnabled false
+            applicationIdSuffix ".debug"
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.18.3"
+        }
+    }
+    sourceSets {
+        main {
+            assets.srcDirs = ['../assets']
+        }
+    }
+}

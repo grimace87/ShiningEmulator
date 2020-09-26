@@ -5,7 +5,21 @@ Emulates a game boy system. Projects included for Windows and Android.
 
 Does not include any games, and never will include any games that aren't made freely available by the developer.
 
-## Building
+#### Building
 
-- Windows project is in the ShiningEmulatorWindows folder; tested using CLion. Open the project in that folder. Requires the MSVC toolchain installed (install Visual Studio with C++ Desktop development components).
-- Android project is in the ShiningEmulatorAndroid folder; tested using Android Studio. Import the project in that folder, and it should be as simple as running the project from there.
+- Windows project based on root-level CMakeLists.txt; tested using CLion. Open the root directory and load the CMakeLists.txt. Requires the MSVC toolchain installed (install Visual Studio with C++ Desktop development components).
+- Android project based on root-level build.gradle; tested using Android Studio. Import the project in the root directory.
+
+#### Library dependencies
+
+Included in this repo:
+
+- 'KHR/khrplatform.h' (Windows only) - required by 'glext.h'
+- Treeki/libxbr-standalone (modified from original) - upscale pixel graphics using xBR algorithm
+
+Installed using submodules:
+
+- ivandeve/lodepng - lightweight PNG encoder/decoder
+- g-truc/glm - OpenGL matrix mathematics library
+- KhronosGroup/OpenGL-Registry (Windows only) - for OpenGL bindings from 'glext.h'
+- google/oboe (Android only) - native audio library

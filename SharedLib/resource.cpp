@@ -5,7 +5,7 @@
 
 #define LODEPNG_NO_COMPILE_ENCODER
 #define LODEPNG_NO_COMPILE_DISK
-#include <lodepng/lodepng.h>
+#include <lodepng.h>
 
 void copyIntoBitmap(const unsigned char* src, int srcWidth, int srcHeight, unsigned char* dst, int dstWidth, int dstX, int dstY);
 

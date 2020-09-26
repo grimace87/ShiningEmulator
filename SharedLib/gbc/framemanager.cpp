@@ -4,7 +4,7 @@
 #define FRAME_STATUS_BEING_DRAWN    1
 #define FRAME_STATUS_BEING_RENDERED 2
 
-#include <libxbr-standalone/filters.h>
+#include <filters.h>
 #include <sys/types.h>
 
 xbr_data xbrData;
