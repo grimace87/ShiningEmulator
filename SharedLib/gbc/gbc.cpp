@@ -20,7 +20,8 @@ uint32_t stockPaletteObj2[4] = { 0xffffffffU, 0xffa0a0a0U, 0xff404040U, 0xff0000
 // Values set while draw across a row - zero allows sprite to be drawn if OBJ priority is set, non-zero will
 // possibly block sprites being drawn (depends on several factors, e.g. OBJ priority attribute as well as
 // BG priority attribute in VRAM bank 1 for CGB mode)
-uint32_t spriteBlockingMask[160];
+uint32_t bgColorNumbers[160];
+uint32_t bgDisplayPriorities[160];
 
 constexpr int MULTIPLIER_ARRAY_SIZE = 21;
 constexpr int CLOCK_MULTIPLIERS[MULTIPLIER_ARRAY_SIZE] = { 1,  1,  1, 1, 1,  2, 1, 4, 2, 4,  1,  5, 3, 7, 2, 5,  3, 5, 8, 12, 20 };
@@ -1779,7 +1780,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             while (pixX < 8) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = translatedPaletteBg[colourIndex];
-                spriteBlockingMask[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
+                bgColorNumbers[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
                 pixX++;
             }
 
@@ -1799,7 +1800,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         while (pixX < max) {
             uint32_t colourIndex = *tileSetPointer++;
             *dstPointer++ = translatedPaletteBg[colourIndex];
-            spriteBlockingMask[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
+            bgColorNumbers[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
             pixX++;
         }
     }
@@ -1837,7 +1838,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             while (pixX < 8) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = translatedPaletteBg[colourIndex];
-                spriteBlockingMask[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
+                bgColorNumbers[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
                 pixX++;
             }
 
@@ -1857,7 +1858,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         while (pixX < max) {
             uint32_t colourIndex = *tileSetPointer++;
             *dstPointer++ = translatedPaletteBg[colourIndex];
-            spriteBlockingMask[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
+            bgColorNumbers[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
             pixX++;
         }
     }
@@ -1941,7 +1942,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             }
 
             // Get priority flag
-            unsigned int BackgroundPriority = spriteFlags & 0x80U;
+            unsigned int spriteGivesBgPriority = spriteFlags & 0x80U;
 
             // Set point to draw to
             dstPointer = &frameBuffer[160 * lineNo + scrX];
@@ -1957,8 +1958,8 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
                 tileSetPointer += tileSetPointerDirection;
                 if (getPix > 0) {
                     // Draw sprites where BG wrote 0 or OBJ has priority
-                    if (BackgroundPriority) {
-                        if (spriteBlockingMask[pixelNo] == 0) {
+                    if (spriteGivesBgPriority) {
+                        if (bgColorNumbers[pixelNo] == 0) {
                             *dstPointer = translatedPaletteObj[getPix + paletteOffset];
                         }
                     } else {
@@ -2169,7 +2170,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
             }
 
             // Get priority flag
-            unsigned int BackgroundPriority = spriteFlags & 0x80U;
+            unsigned int spriteGivesBgPriority = spriteFlags & 0x80U;
 
             // Set point to draw to
             dstPointer = &sgb.monoData[160 * lineNo + scrX];
@@ -2183,7 +2184,7 @@ void Gbc::readLineSgb(uint32_t * frameBuffer) {
                 getPix = *tileSetPointer;
                 tileSetPointer += tileSetPointerDirection;
                 if (getPix > 0) {
-                    if (BackgroundPriority) {
+                    if (spriteGivesBgPriority) {
                         if (*dstPointer == colourZero) {
                             *dstPointer = sgbPaletteTranslationObj[getPix + paletteOffset];
                         }
@@ -2265,7 +2266,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 while (pixX < 8) {
                     uint32_t colourIndex = *tileSetPointer--;
                     *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                    spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                    bgColorNumbers[pixelNo] = colourIndex;
+                    bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                     pixX++;
                 }
             } else {
@@ -2273,7 +2275,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 while (pixX < 8) {
                     uint32_t colourIndex = *tileSetPointer++;
                     *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                    spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                    bgColorNumbers[pixelNo] = colourIndex;
+                    bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                     pixX++;
                 }
             }
@@ -2311,14 +2314,16 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer--;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                bgColorNumbers[pixelNo] = colourIndex;
+                bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                 pixX++;
             }
         } else {
             while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                bgColorNumbers[pixelNo] = colourIndex;
+                bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                 pixX++;
             }
         }
@@ -2373,7 +2378,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 while (pixX < 8) {
                     uint32_t colourIndex = *tileSetPointer--;
                     *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                    spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                    bgColorNumbers[pixelNo] = colourIndex;
+                    bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                     pixX++;
                 }
             } else {
@@ -2381,7 +2387,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 while (pixX < 8) {
                     uint32_t colourIndex = *tileSetPointer++;
                     *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                    spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                    bgColorNumbers[pixelNo] = colourIndex;
+                    bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                     pixX++;
                 }
             }
@@ -2419,14 +2426,16 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer--;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                bgColorNumbers[pixelNo] = colourIndex;
+                bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                 pixX++;
             }
         } else {
             while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                spriteBlockingMask[pixelNo++] = bgPriorityBit | colourIndex; // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
+                bgColorNumbers[pixelNo] = colourIndex;
+                bgDisplayPriorities[pixelNo++] = bgPriorityBit;
                 pixX++;
             }
         }
@@ -2514,7 +2523,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             }
 
             // Get priority flag
-            unsigned int BackgroundPriority = spriteFlags & 0x80U;
+            unsigned int spriteGivesBgPriority = spriteFlags & 0x80U;
 
             // Set point to draw to
             dstPointer = &frameBuffer[160 * lineNo + scrX];
@@ -2528,20 +2537,16 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             while (pixX < max) {
                 getPix = *tileSetPointer;
                 tileSetPointer += tileSetPointerDirection;
-                uint32_t blockingMask = spriteBlockingMask[pixelNo];
-                uint32_t backgroundBlocked = blockingMask & 0x04U;
-                if (!backgroundBlocked) {
-                    if (getPix > 0) {
-                        // Draw sprites where no BG priority and either BG wrote 0 or OBJ has priority
-                        if (BackgroundPriority) {
-                            if (blockingMask == 0) {
-                                *dstPointer = cgbObjPalette[getPix + paletteOffset];
-                            } else {
-                                spriteBlockingMask[pixelNo] = 0;
-                            }
-                        } else {
+                if (getPix > 0) {
+                    uint32_t bgColor = bgColorNumbers[pixelNo];
+                    uint32_t bgTakesPriority = bgDisplayPriorities[pixelNo];
+                    // Draw sprites where BG wrote zero or neither BG nor sprite flags gave the BG priority
+                    if (bgTakesPriority || spriteGivesBgPriority) {
+                        if (bgColor == 0) {
                             *dstPointer = cgbObjPalette[getPix + paletteOffset];
                         }
+                    } else {
+                        *dstPointer = cgbObjPalette[getPix + paletteOffset];
                     }
                 }
                 dstPointer++;
