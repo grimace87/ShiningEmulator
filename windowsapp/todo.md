@@ -33,7 +33,9 @@
 #### From Perfect Dark
 
 - Shooting ranges lag noticeably
-- Sprite visibility very inconsistent
+- Many sound effects missing (running footsteps, gunshots, guards taking damage)
+- Sprite visibility very inconsistent (2-tile-wide column on left-hand-side blocks all sprites)
+- Skipping Rare logo animation leads to corrupt graphic (and the corruption is not consistent)
 - Loading a save after progressing some way into training seems to crash
 
 #### Wario Land 3
