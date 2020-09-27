@@ -1,20 +1,18 @@
 #pragma once
 
-#include <cstdint>
+#include "frame.h"
 
 class FrameManager {
-    unsigned int frame1Status;
-    unsigned int frame2Status;
-    uint32_t* frame1Buffer;
-    uint32_t* frame2Buffer;
+    Frame frame1;
+    Frame frame2;
     int nextFrameToBegin;
 public:
     FrameManager();
     ~FrameManager();
-    bool frameIsInProgress();
-    uint32_t* getInProgressFrameBuffer();
+    [[nodiscard]] bool frameIsInProgress() const;
+    [[nodiscard]] uint32_t* getInProgressFrameBuffer() const;
     uint32_t* beginNewFrame();
     int finishCurrentFrame();
     uint32_t* getRenderableFrameBuffer();
-    void freeFrame(uint32_t* frameBuffer);
+    void freeFrame(const uint32_t* frameBuffer);
 };

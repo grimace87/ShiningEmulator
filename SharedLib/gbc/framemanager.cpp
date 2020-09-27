@@ -1,11 +1,6 @@
 #include "framemanager.h"
 
-#define FRAME_STATUS_AVAILABLE      0
-#define FRAME_STATUS_BEING_DRAWN    1
-#define FRAME_STATUS_BEING_RENDERED 2
-
 #include <filters.h>
-#include <sys/types.h>
 
 xbr_data xbrData;
 xbr_params xbrParams1;
@@ -13,17 +8,10 @@ xbr_params xbrParams2;
 uint32_t* extendedBuffer1;
 uint32_t* extendedBuffer2;
 
-constexpr off_t BASE_FRAME_W = 160;
-constexpr off_t BASE_FRAME_H = 144;
-constexpr off_t PADDING_ROWS = 10;
-constexpr off_t FRAME_SCALE_FACTOR = 4;
-
-FrameManager::FrameManager() {
-    frame1Status = FRAME_STATUS_AVAILABLE;
-    frame2Status = FRAME_STATUS_AVAILABLE;
-    frame1Buffer = new uint32_t[BASE_FRAME_W * (BASE_FRAME_H + PADDING_ROWS)];
-    frame2Buffer = new uint32_t[BASE_FRAME_W * (BASE_FRAME_H + PADDING_ROWS)];
-    nextFrameToBegin = 1;
+FrameManager::FrameManager() :
+    frame1(),
+    frame2(),
+    nextFrameToBegin(1) {
 
 	delete[] extendedBuffer1;
 	delete[] extendedBuffer2;
@@ -35,7 +23,7 @@ FrameManager::FrameManager() {
 	xbrParams1.data = &xbrData;
 	xbrParams1.inHeight = BASE_FRAME_H;
 	xbrParams1.inWidth = BASE_FRAME_W;
-	xbrParams1.input = (uint8_t*)frame1Buffer;
+	xbrParams1.input = (uint8_t*)frame1.getBuffer();
 	xbrParams1.inPitch = BASE_FRAME_W * sizeof(uint32_t);
 	xbrParams1.output = (uint8_t*)extendedBuffer1;
 	xbrParams1.outPitch = BASE_FRAME_W * 4 * sizeof(uint32_t);
@@ -43,53 +31,48 @@ FrameManager::FrameManager() {
 	xbrParams2.data = &xbrData;
 	xbrParams2.inHeight = BASE_FRAME_H;
 	xbrParams2.inWidth = BASE_FRAME_W;
-	xbrParams2.input = (uint8_t*)frame1Buffer;
+	xbrParams2.input = (uint8_t*)frame2.getBuffer();
 	xbrParams2.inPitch = BASE_FRAME_W * sizeof(uint32_t);
 	xbrParams2.output = (uint8_t*)extendedBuffer2;
 	xbrParams2.outPitch = BASE_FRAME_W * FRAME_SCALE_FACTOR * sizeof(uint32_t);
 }
 
-FrameManager::~FrameManager() {
-    delete[] frame1Buffer;
-    delete[] frame2Buffer;
+FrameManager::~FrameManager() = default;
+
+bool FrameManager::frameIsInProgress() const {
+    return frame1.isBeingDrawn() || frame2.isBeingDrawn();
 }
 
-bool FrameManager::frameIsInProgress() {
-    return (frame1Status == FRAME_STATUS_BEING_DRAWN) || (frame2Status == FRAME_STATUS_BEING_DRAWN);
-}
-
-uint32_t* FrameManager::getInProgressFrameBuffer() {
-    if (frame1Status == FRAME_STATUS_BEING_DRAWN) {
-        return frame1Buffer;
-    } else if(frame2Status == FRAME_STATUS_BEING_DRAWN) {
-        return frame2Buffer;
+uint32_t* FrameManager::getInProgressFrameBuffer() const {
+    if (frame1.isBeingDrawn()) {
+        return frame1.getBuffer();
+    } else if(frame2.isBeingDrawn()) {
+        return frame2.getBuffer();
     } else {
         return nullptr;
     }
 }
 
 uint32_t* FrameManager::beginNewFrame() {
-    if ((nextFrameToBegin == 1) && (frame1Status == FRAME_STATUS_AVAILABLE)) {
-        frame1Status = FRAME_STATUS_BEING_DRAWN;
+    if ((nextFrameToBegin == 1) && frame1.isAvailable()) {
         nextFrameToBegin = 2;
-        return frame1Buffer;
-    } else if ((nextFrameToBegin == 2) && (frame2Status == FRAME_STATUS_AVAILABLE)) {
-        frame2Status = FRAME_STATUS_BEING_DRAWN;
+        return frame1.getForDrawing();
+    } else if ((nextFrameToBegin == 2) && frame2.isAvailable()) {
         nextFrameToBegin = 1;
-        return frame2Buffer;
+        return frame2.getForDrawing();
     } else {
         return nullptr;
     }
 }
 
 int FrameManager::finishCurrentFrame() {
-    if (frame1Status == FRAME_STATUS_BEING_DRAWN) {
+    if (frame1.isBeingDrawn()) {
 		xbr_filter_xbr4x(&xbrParams1);
-        frame1Status = FRAME_STATUS_BEING_RENDERED;
+        frame1.markForRendering();
         return 1;
-    } else if (frame2Status == FRAME_STATUS_BEING_DRAWN) {
+    } else if (frame2.isBeingDrawn()) {
 		xbr_filter_xbr4x(&xbrParams2);
-        frame2Status = FRAME_STATUS_BEING_RENDERED;
+        frame2.markForRendering();
         return 2;
     } else {
         return 0;
@@ -97,19 +80,19 @@ int FrameManager::finishCurrentFrame() {
 }
 
 uint32_t* FrameManager::getRenderableFrameBuffer() {
-    if (frame1Status == FRAME_STATUS_BEING_RENDERED) {
+    if (frame1.isBeingRendered()) {
         return extendedBuffer1;
-    } else if (frame2Status == FRAME_STATUS_BEING_RENDERED) {
+    } else if (frame2.isBeingRendered()) {
         return extendedBuffer2;
     } else {
         return nullptr;
     }
 }
 
-void FrameManager::freeFrame(uint32_t* frameBuffer) {
+void FrameManager::freeFrame(const uint32_t* frameBuffer) {
     if (frameBuffer == extendedBuffer1) {
-        frame1Status = FRAME_STATUS_AVAILABLE;
+        frame1.markAvailable();
     } else if (frameBuffer == extendedBuffer2) {
-        frame2Status = FRAME_STATUS_AVAILABLE;
+        frame2.markAvailable();
     }
 }
