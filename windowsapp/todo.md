@@ -16,6 +16,7 @@
 
 #### From Donkey Kong Land 2
 
+- Sprites are visible within window (stand on barrels in first level, confirmed this is an error)
 - Graphics are corrupted by loading while emulated VRAM is inaccessible
 - Several sound channels are doing very weird things
 - Pausing in the frist level darkens colours permanently (until exiting stage)
