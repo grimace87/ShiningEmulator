@@ -254,17 +254,18 @@ void GbcRenderer::doWork() {
                 glm::mat4 mainMvpMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / aspect, 1.0f, 1.0f));
 
                 platformRenderer->subTexture(this->windowTextureHandle, TEXTURE_FORMAT_RGBA, 0, 0, 160 * 4, 144 * 4, (unsigned char*)upscaledFrameBuffer);
-                gbc->frameManager.freeFrame(upscaledFrameBuffer);
+                bool frameFreed = gbc->frameManager.freeFrame(upscaledFrameBuffer);
+                if (frameFreed) {
+                    // Set uniforms for the heads-up display rectangles
+                    firstConfig = 2;
+                    configCount = 2;
+                    auto& windowConfig = frameConfigs[FCT::GAME_WINDOW];
+                    TextureShader::prepareConfig(windowConfig.renderConfigs[RCT::GAME_WINDOW], 0, glm::value_ptr(mainMvpMatrix));
+                    auto &hudConfig = frameConfigs[FCT::GAME_HUD];
+                    TextureShader::prepareConfig(hudConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
 
-                // Set uniforms for the heads-up display rectangles
-                firstConfig = 2;
-                configCount = 2;
-                auto& windowConfig = frameConfigs[FCT::GAME_WINDOW];
-                TextureShader::prepareConfig(windowConfig.renderConfigs[RCT::GAME_WINDOW], 0, glm::value_ptr(mainMvpMatrix));
-                auto &hudConfig = frameConfigs[FCT::GAME_HUD];
-                TextureShader::prepareConfig(hudConfig.renderConfigs[RCT::GAME_HUD], 0, glm::value_ptr(mainMvpMatrix));
-
-                framePrepared = true;
+                    framePrepared = true;
+                }
             }
         } else {
             //auto msg = std::string("Invald game state: ") + std::to_string(static_cast<int>(state->appMode));

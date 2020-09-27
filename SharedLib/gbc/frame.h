@@ -20,9 +20,9 @@ class Frame {
 public:
     Frame();
     ~Frame();
-    uint32_t* getForDrawing();
-    void markForRendering();
-    void markAvailable();
+    [[nodiscard]] uint32_t* getForDrawing();
+    [[nodiscard]] bool markForRendering();
+    [[nodiscard]] bool markAvailable();
 
     [[nodiscard]] inline bool isAvailable() const { return status == FrameStatus::AVAILABLE; }
     [[nodiscard]] inline bool isBeingDrawn() const { return status == FrameStatus::BEING_DRAWN; }

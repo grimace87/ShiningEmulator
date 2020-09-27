@@ -1,7 +1,5 @@
 #include "frame.h"
 
-#include <exception>
-
 Frame::Frame() {
     status = FrameStatus::AVAILABLE;
     buffer = new uint32_t[BASE_FRAME_W * (BASE_FRAME_H + PADDING_ROWS)];
@@ -19,16 +17,18 @@ uint32_t* Frame::getForDrawing() {
     return buffer;
 }
 
-void Frame::markForRendering() {
+bool Frame::markForRendering() {
     if (status != FrameStatus::BEING_DRAWN) {
-        throw std::exception("adaw");
+        return false;
     }
     status = FrameStatus::BEING_RENDERED;
+    return true;
 }
 
-void Frame::markAvailable() {
+bool Frame::markAvailable() {
     if (status != FrameStatus::BEING_RENDERED) {
-        throw std::exception("adaw");
+        return false;
     }
     status = FrameStatus::AVAILABLE;
+    return true;
 }

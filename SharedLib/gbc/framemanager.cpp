@@ -68,11 +68,15 @@ uint32_t* FrameManager::beginNewFrame() {
 int FrameManager::finishCurrentFrame() {
     if (frame1.isBeingDrawn()) {
 		xbr_filter_xbr4x(&xbrParams1);
-        frame1.markForRendering();
+        if (!frame1.markForRendering()) {
+            return 0;
+        }
         return 1;
     } else if (frame2.isBeingDrawn()) {
 		xbr_filter_xbr4x(&xbrParams2);
-        frame2.markForRendering();
+        if (!frame2.markForRendering()) {
+            return 0;
+        }
         return 2;
     } else {
         return 0;
@@ -89,10 +93,11 @@ uint32_t* FrameManager::getRenderableFrameBuffer() {
     }
 }
 
-void FrameManager::freeFrame(const uint32_t* frameBuffer) {
+bool FrameManager::freeFrame(const uint32_t* frameBuffer) {
     if (frameBuffer == extendedBuffer1) {
-        frame1.markAvailable();
+        return frame1.markAvailable();
     } else if (frameBuffer == extendedBuffer2) {
-        frame2.markAvailable();
+        return frame2.markAvailable();
     }
+    return false;
 }

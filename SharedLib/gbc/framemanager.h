@@ -12,7 +12,7 @@ public:
     [[nodiscard]] bool frameIsInProgress() const;
     [[nodiscard]] uint32_t* getInProgressFrameBuffer() const;
     uint32_t* beginNewFrame();
-    int finishCurrentFrame();
+    [[nodiscard]] int finishCurrentFrame();
     uint32_t* getRenderableFrameBuffer();
-    void freeFrame(const uint32_t* frameBuffer);
+    [[nodiscard]] bool freeFrame(const uint32_t* frameBuffer);
 };
