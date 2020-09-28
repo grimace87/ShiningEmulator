@@ -1567,7 +1567,7 @@ void Gbc::writeIO(unsigned int ioIndex, uint8_t data) {
             ioPorts[0x53] = data & 0x1fU;
             return;
         case 0x54: // HDMA4
-            ioPorts[0x54] = data;
+            ioPorts[0x54] = data & 0xf0U;
             return;
         case 0x55: // HDMA5 (initiates DMA transfer from ROM or RAM to VRAM)
             if (!romProperties.cgbFlag) {
