@@ -1809,7 +1809,6 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
     scrX = ioPorts[0x4b];
     scrY = ioPorts[0x4a];
     tileMapBase = lcdCtrl & 0x40U ? 0x1c00U : 0x1800U;
-    pixelNo = 0;
     if (((lcdCtrl & 0x20U) != 0x00U) && (scrX < 167) && (scrY <= lineNo)) {
         // Subtract 7 from window X pos
         if (scrX > 6) {
@@ -1818,6 +1817,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
 
         // Set point to draw to
         dstPointer = &frameBuffer[160 * lineNo + scrX];
+        unsigned int rowPixel = scrX;
 
         // Set starting point of VRAM data to read, in terms of pixel coordinates within the tile, and tile coordinates within the tilemap
         pixX = 0;
@@ -1838,7 +1838,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
             while (pixX < 8) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = translatedPaletteBg[colourIndex];
-                bgColorNumbers[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
+                bgColorNumbers[rowPixel++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
                 pixX++;
             }
 
@@ -1858,7 +1858,7 @@ void Gbc::readLineGb(uint32_t* frameBuffer) {
         while (pixX < max) {
             uint32_t colourIndex = *tileSetPointer++;
             *dstPointer++ = translatedPaletteBg[colourIndex];
-            bgColorNumbers[pixelNo++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
+            bgColorNumbers[rowPixel++] = colourIndex; // Draw sprites where BG wrote 0 or OBJ has priority
             pixX++;
         }
     }
@@ -2342,6 +2342,7 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
 
         // Set point to draw to
         dstPointer = &frameBuffer[160 * lineNo + scrX];
+        unsigned int rowPixel = scrX;
 
         // Set starting point of VRAM data to read, in terms of pixel coordinates within the tile, and tile coordinates within the tilemap
         pixX = 0;
@@ -2378,8 +2379,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 while (pixX < 8) {
                     uint32_t colourIndex = *tileSetPointer--;
                     *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                    bgColorNumbers[pixelNo] = colourIndex;
-                    bgDisplayPriorities[pixelNo++] = bgPriorityBit;
+                    bgColorNumbers[pixelNo++] = colourIndex;
+                    bgDisplayPriorities[rowPixel++] = bgPriorityBit;
                     pixX++;
                 }
             } else {
@@ -2387,8 +2388,8 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
                 while (pixX < 8) {
                     uint32_t colourIndex = *tileSetPointer++;
                     *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                    bgColorNumbers[pixelNo] = colourIndex;
-                    bgDisplayPriorities[pixelNo++] = bgPriorityBit;
+                    bgColorNumbers[pixelNo++] = colourIndex;
+                    bgDisplayPriorities[rowPixel++] = bgPriorityBit;
                     pixX++;
                 }
             }
@@ -2426,16 +2427,16 @@ void Gbc::readLineCgb(uint32_t * frameBuffer) {
             while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer--;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                bgColorNumbers[pixelNo] = colourIndex;
-                bgDisplayPriorities[pixelNo++] = bgPriorityBit;
+                bgColorNumbers[pixelNo++] = colourIndex;
+                bgDisplayPriorities[rowPixel++] = bgPriorityBit;
                 pixX++;
             }
         } else {
             while (pixX < max) {
                 uint32_t colourIndex = *tileSetPointer++;
                 *dstPointer++ = cgbBgPalette[paletteOffset + colourIndex];
-                bgColorNumbers[pixelNo] = colourIndex;
-                bgDisplayPriorities[pixelNo++] = bgPriorityBit;
+                bgColorNumbers[pixelNo++] = colourIndex;
+                bgDisplayPriorities[rowPixel++] = bgPriorityBit;
                 pixX++;
             }
         }
