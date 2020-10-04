@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iostream>
 
 #define NR52 ioPorts[0x26]
 
@@ -143,4 +144,7 @@ public:
     void restartChannel4();
 
     void onAudioThreadNeedingData(int16_t* bufferPtr, uint32_t frameCount);
+
+    void loadStateFromStream(std::istream& stream);
+    void saveStateToStream(std::ostream& stream);
 };

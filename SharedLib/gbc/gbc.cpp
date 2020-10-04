@@ -6308,6 +6308,7 @@ void Gbc::loadSaveState(std::istream& stream) {
     READ_STREAM_A(sram.data, uint8_t, sram.sizeBytes);
     READ_STREAM(keys, InputSet);
     READ_STREAM(keyStateChanged, bool);
+    audioUnit.loadStateFromStream(stream);
 }
 
 #define WRITE_STREAM(var, type) stream.write(reinterpret_cast<char*>(&var), sizeof(type))
@@ -6400,4 +6401,5 @@ void Gbc::saveSaveState(std::ostream& stream) {
     WRITE_STREAM_A(sram.data, uint8_t, sram.sizeBytes);
     WRITE_STREAM(keys, InputSet);
     WRITE_STREAM(keyStateChanged, bool);
+    audioUnit.saveStateToStream(stream);
 }
