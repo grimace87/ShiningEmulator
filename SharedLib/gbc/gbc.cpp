@@ -97,7 +97,7 @@ Gbc::~Gbc() {
 // Return how many clock ticks to consume when this happens,
 // also perform any other behaviour deemed necessary
 int Gbc::runInvalidInstruction(uint8_t instruction) {
-    isPaused = true;
+    isRunning = false;
     return clocksAcc;
     //std::string msg = "Illegal operation - " + std::to_string((int)instruction);
     //throw new std::runtime_error(msg);

@@ -83,6 +83,9 @@ void GbcApp::loadPersistentState(std::istream& stream) {
             openRomFile(file.get());
             if (gbc.romProperties.valid) {
                 gbc.loadSaveState(stream);
+                if (!gbc.isRunning) {
+                    gbc.reset();
+                }
                 return;
             }
         }
@@ -322,6 +325,9 @@ void GbcApp::doWork() {
                     std::fstream file = platform.openFile(fullPathedStateFile, FileOpenMode::READ_ONLY_BINARY);
                     if (file.is_open()) {
                         gbc.loadSaveState(file);
+                        if (!gbc.isRunning) {
+                            gbc.reset();
+                        }
                     }
                 }
             } else if (saveSaveStateButton.containsCoords(downXUnits, downYUnits)) {
